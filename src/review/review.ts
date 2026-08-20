@@ -1,0 +1,105 @@
+import type {
+  Finding,
+  MetricKey,
+  ReviewResult,
+  ReviewStatus,
+  ScopeResult,
+} from '../core/types.js';
+import { analyzeProject, type ProgressStep } from '../core/analyze.js';
+import { loadConfig } from '../config/load.js';
+import { compareToBaseline, readBaseline } from '../baseline/baseline.js';
+import { detectChanges } from '../git/git.js';
+import { checkScope } from './scope.js';
+import { fingerprint } from '../utils/hash.js';
+import { sortFindings } from '../core/context.js';
+
+export interface ReviewOptions {
+  root: string;
+  /** Git ref to compare against; defaults to "whatever changed recently". */
+  base?: string;
+  scope?: string[];
+  cache?: boolean;
+  onProgress?: (step: ProgressStep) => void;
+}
+
+const SCOPE_RULE = { id: 'scope/out-of-scope-change', category: 'scope' as const };
+
+export async function runReview(options: ReviewOptions): Promise<ReviewResult> {
+  const config = await loadConfig(options.root);
+  const changes = detectChanges(options.root, options.base ? { base: options.base } : {});
+
+  const { result } = await analyzeProject({
+    root: options.root,
+    config,
+    changes,
+    cache: options.cache === false ? false : undefined,
+    ...(options.onProgress ? { onProgress: options.onProgress } : {}),
+  });
+
+  const scopePatterns = options.scope ?? config.scope;
+  const scope = changes ? checkScope(changes, scopePatterns) : null;
+  if (scope) {
+    const scopeFinding = buildScopeFinding(scope);
+    if (scopeFinding) result.findings = sortFindings([...result.findings, scopeFinding]);
+  }
+
+  const baseline = readBaseline(options.root);
+  const comparison = baseline ? compareToBaseline(baseline, result) : null;
+
+  return {
+    status: determineStatus(comparison?.newFindings ?? result.findings, comparison?.drift ?? null, scope),
+    current: result,
+    baseline,
+    changes,
+    newFindings: comparison?.newFindings ?? [],
+    resolvedFindings: comparison?.resolvedFindings ?? [],
+    scope,
+    drift: comparison?.drift ?? null,
+  };
+}
+
+/**
+ * Scope is not a configurable rule — it comes from what the developer said the
+ * change was for — so the finding is built directly rather than through the
+ * rule pipeline.
+ */
+function buildScopeFinding(scope: ScopeResult): Finding | null {
+  if (scope.outOfScope.length === 0) return null;
+  const count = scope.outOfScope.length;
+
+  return {
+    id: SCOPE_RULE.id,
+    fingerprint: fingerprint([SCOPE_RULE.id, ...scope.outOfScope]),
+    severity: 'warning',
+    category: 'scope',
+    title: `${count} file${count === 1 ? '' : 's'} changed outside the requested area`,
+    message:
+      `This change was scoped to ${scope.patterns.join(', ')}, but ${count} file` +
+      `${count === 1 ? '' : 's'} outside that area changed too.`,
+    detail: scope.outOfScope.slice(0, 10),
+    suggestion:
+      'Check whether those edits were intended. If they were, widen the scope; if not, revert them.',
+    current: scope.outOfScope,
+  };
+}
+
+/**
+ * A review is judged on what the change introduced, not on problems that were
+ * already there. That distinction is the whole point of having a baseline.
+ */
+export function determineStatus(
+  findings: Finding[],
+  drift: Record<MetricKey, number> | null,
+  scope: ScopeResult | null,
+): ReviewStatus {
+  const hasNewErrors = findings.some((finding) => finding.severity === 'error');
+  const overallDrop = drift ? -drift.overall : 0;
+
+  if (hasNewErrors || overallDrop >= 5) return 'degraded';
+
+  const hasNewWarnings = findings.some((finding) => finding.severity === 'warning');
+  const outOfScope = (scope?.outOfScope.length ?? 0) > 0;
+  if (hasNewWarnings || overallDrop > 0 || outOfScope) return 'needs-review';
+
+  return 'healthy';
+}

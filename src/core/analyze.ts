@@ -1,0 +1,159 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import type { AnalysisResult, ChangeSet, Finding, ParsedFile } from './types.js';
+import type { ResolvedConfig } from '../config/schema.js';
+import { loadConfig } from '../config/load.js';
+import { scanFiles } from './scan.js';
+import { parseFile } from '../languages/index.js';
+import { detectProject } from '../detect/project.js';
+import { buildDependencyGraph } from '../graph/dependency-graph.js';
+import { createResolverContext } from '../graph/resolve.js';
+import { findCycles } from '../graph/cycles.js';
+import { buildLayerModel } from '../architecture/layers.js';
+import { allRules } from '../rules/index.js';
+import { computeMetrics, computeStats, fileMetricsOf } from './metrics.js';
+import { sortFindings, type AnalysisContext } from './context.js';
+import { ParseCache } from './cache.js';
+
+export type ProgressStep =
+  | 'reading-project'
+  | 'parsing'
+  | 'building-graph'
+  | 'analyzing-architecture'
+  | 'running-rules'
+  | 'done';
+
+export interface AnalyzeOptions {
+  root: string;
+  config?: ResolvedConfig;
+  /** Git changes to attach to the context; some rules only run with them. */
+  changes?: ChangeSet | null;
+  cache?: ParseCache | false;
+  onProgress?: (step: ProgressStep) => void;
+  /** Only run these rule ids. Used by watch mode for quick re-checks. */
+  onlyRules?: string[];
+}
+
+export interface Analysis {
+  result: AnalysisResult;
+  context: AnalysisContext;
+  cache: ParseCache;
+}
+
+export async function analyzeProject(options: AnalyzeOptions): Promise<Analysis> {
+  const started = Date.now();
+  const root = path.resolve(options.root);
+  const notify = options.onProgress ?? (() => {});
+
+  notify('reading-project');
+  const config = options.config ?? (await loadConfig(root));
+  const { files: relativePaths } = scanFiles(root, config);
+
+  notify('parsing');
+  const cache = options.cache === false ? new ParseCache(null) : options.cache ?? ParseCache.open(root);
+  const files = parseAll(root, relativePaths, cache);
+  cache.save(new Set(relativePaths));
+
+  const project = detectProject(root, { files: relativePaths });
+
+  notify('building-graph');
+  const resolver = createResolverContext(root, relativePaths, project.languages);
+  const graph = buildDependencyGraph(files, resolver);
+
+  notify('analyzing-architecture');
+  const layers = buildLayerModel(config, files);
+  const cycles = findCycles(graph);
+
+  const context: AnalysisContext = {
+    root,
+    config,
+    project,
+    files,
+    fileMap: new Map(files.map((file) => [file.path, file])),
+    graph,
+    layers,
+    cycles,
+    changes: options.changes ?? null,
+  };
+
+  notify('running-rules');
+  const rules = options.onlyRules
+    ? allRules.filter((rule) => options.onlyRules!.includes(rule.id))
+    : allRules;
+
+  const findings: Finding[] = [];
+  for (const rule of rules) {
+    try {
+      findings.push(...rule.run(context));
+    } catch (error) {
+      // One broken rule must never take down the whole analysis.
+      findings.push(ruleCrashFinding(rule.id, error));
+    }
+  }
+
+  const sorted = sortFindings(findings);
+  const stats = computeStats(context, sorted);
+  const metrics = computeMetrics(stats, project.hasTypeScript);
+
+  notify('done');
+
+  return {
+    context,
+    cache,
+    result: {
+      metrics,
+      stats,
+      findings: sorted,
+      fileMetrics: fileMetricsOf(files),
+      project,
+      durationMs: Date.now() - started,
+    },
+  };
+}
+
+function parseAll(root: string, relativePaths: string[], cache: ParseCache): ParsedFile[] {
+  const files: ParsedFile[] = [];
+
+  for (const relative of relativePaths) {
+    const absolute = path.join(root, relative);
+    let stats: fs.Stats;
+    try {
+      stats = fs.statSync(absolute);
+    } catch {
+      continue;
+    }
+
+    const cached = cache.get(relative, stats);
+    if (cached) {
+      files.push({ ...cached, absPath: absolute });
+      continue;
+    }
+
+    let content: string;
+    try {
+      content = fs.readFileSync(absolute, 'utf8');
+    } catch {
+      continue;
+    }
+
+    const parsed = parseFile({ path: relative, absPath: absolute, content });
+    if (!parsed) continue;
+    cache.set(relative, stats, parsed);
+    files.push(parsed);
+  }
+
+  return files;
+}
+
+function ruleCrashFinding(ruleId: string, error: unknown): Finding {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    id: 'internal/rule-error',
+    fingerprint: `rule-error-${ruleId}`,
+    severity: 'info',
+    category: 'maintainability',
+    title: `Rule ${ruleId} failed to run`,
+    message: `Little Owl could not finish this rule: ${message}. The rest of the analysis is unaffected.`,
+    suggestion: 'Please report this at https://github.com/littleowlcode/little-owl-code/issues',
+  };
+}
