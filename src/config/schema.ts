@@ -79,6 +79,4 @@ export interface ResolvedConfig {
 }
 
 /** Helper for `.little-owl/config.ts` that gives users type checking. */
-export function defineConfig(config: LittleOwlConfig): LittleOwlConfig {
-  return config;
-}
+export const defineConfig = (config: LittleOwlConfig): LittleOwlConfig => config;

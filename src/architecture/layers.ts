@@ -55,12 +55,12 @@ const FEATURE_ROOT_CANDIDATES = ['features', 'modules', 'domains', 'packages'];
 /** Drops wrapper directories so `src/components/x` is seen as `components/x`. */
 const WRAPPER_SEGMENTS = new Set(['src', 'app_src', 'source']);
 
-function meaningfulSegments(file: string): string[] {
+const meaningfulSegments = (file: string): string[] => {
   const parts = segments(file);
   return parts[0] !== undefined && WRAPPER_SEGMENTS.has(parts[0]) ? parts.slice(1) : parts;
-}
+};
 
-export function inferLayers(files: ParsedFile[]): LayerModel {
+export const inferLayers = (files: ParsedFile[]): LayerModel => {
   const present = new Map<string, Set<string>>();
 
   for (const file of files) {
@@ -91,9 +91,9 @@ export function inferLayers(files: ParsedFile[]): LayerModel {
     ) ?? null;
 
   return { order, dirsByLayer, policy: 'adjacent', inferred: true, featureRoot };
-}
+};
 
-export function buildLayerModel(config: ResolvedConfig, files: ParsedFile[]): LayerModel {
+export const buildLayerModel = (config: ResolvedConfig, files: ParsedFile[]): LayerModel => {
   const configured = config.architecture.layers;
   const hasConfiguredLayers = Object.keys(configured).length > 0;
 
@@ -113,7 +113,7 @@ export function buildLayerModel(config: ResolvedConfig, files: ParsedFile[]): La
     inferred: false,
     featureRoot: config.architecture.featureRoot,
   };
-}
+};
 
 /**
  * Next.js route handlers live under `app/api/` or `pages/api/`, inside what is
@@ -123,7 +123,7 @@ export function buildLayerModel(config: ResolvedConfig, files: ParsedFile[]): La
  */
 const API_ROUTE = /^(app|pages)\/api\//;
 
-function apiRouteLayer(file: string, model: LayerModel): string | null {
+const apiRouteLayer = (file: string, model: LayerModel): string | null => {
   if (!API_ROUTE.test(file)) return null;
 
   const owningLayer = model.order.find((layer) =>
@@ -131,10 +131,10 @@ function apiRouteLayer(file: string, model: LayerModel): string | null {
   );
   if (owningLayer) return owningLayer;
   return model.order[1] ?? model.order[0] ?? null;
-}
+};
 
 /** Which layer a file belongs to, or `null` when it sits outside the model. */
-export function layerOf(file: string, model: LayerModel): string | null {
+export const layerOf = (file: string, model: LayerModel): string | null => {
   const parts = meaningfulSegments(file);
 
   const routeLayer = apiRouteLayer(parts.join('/'), model);
@@ -164,7 +164,7 @@ export function layerOf(file: string, model: LayerModel): string | null {
   }
 
   return null;
-}
+};
 
 export type LayerRelation = 'same' | 'ok' | 'inverted' | 'skip' | 'unknown';
 
@@ -174,11 +174,11 @@ export type LayerRelation = 'same' | 'ok' | 'inverted' | 'skip' | 'unknown';
  * - `inverted`: a lower layer depends on a higher one (data importing UI).
  * - `skip`: a layer reaches past its neighbour (UI importing the database).
  */
-export function classifyLayerDependency(
+export const classifyLayerDependency = (
   fromLayer: string | null,
   toLayer: string | null,
   model: LayerModel,
-): LayerRelation {
+): LayerRelation => {
   if (!fromLayer || !toLayer) return 'unknown';
   if (fromLayer === toLayer) return 'same';
 
@@ -189,16 +189,16 @@ export function classifyLayerDependency(
   if (toIndex < fromIndex) return 'inverted';
   if (model.policy === 'adjacent' && toIndex - fromIndex > 1) return 'skip';
   return 'ok';
-}
+};
 
 /** The feature a file belongs to, when the project is organised by feature. */
-export function featureOf(file: string, model: LayerModel): string | null {
+export const featureOf = (file: string, model: LayerModel): string | null => {
   if (!model.featureRoot) return null;
   const parts = meaningfulSegments(file);
   if (parts[0] !== model.featureRoot) return null;
   return parts[1] ?? null;
-}
+};
 
-export function describeLayerChain(model: LayerModel): string {
+export const describeLayerChain = (model: LayerModel): string => {
   return model.order.length > 0 ? model.order.join(' -> ') : 'no layers detected';
-}
+};

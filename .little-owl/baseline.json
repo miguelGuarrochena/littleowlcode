@@ -1,8 +1,8 @@
 {
   "version": "1",
-  "createdAt": "2026-08-21T16:05:29.503Z",
-  "commit": "3a80211361e31a2a36ae0680f1b8bbe94ae99d56",
-  "branch": "main",
+  "createdAt": "2026-08-21T16:20:39.635Z",
+  "commit": "a8bd5915fa714291f569ff034972df8b28505e65",
+  "branch": "feat/completeness-pass",
   "metrics": {
     "overall": 98,
     "architecture": 100,
@@ -13,7 +13,7 @@
   },
   "stats": {
     "files": 65,
-    "linesOfCode": 8590,
+    "linesOfCode": 8581,
     "functions": 703,
     "cycles": 0,
     "layerViolations": 0,
@@ -112,11 +112,11 @@
     },
     {
       "id": "complexity/large-function",
-      "fingerprint": "4512a5e05b40",
+      "fingerprint": "ea09d5d49b31",
       "severity": "warning",
       "category": "complexity",
       "file": "src/core/metrics.ts",
-      "line": 30,
+      "line": 26,
       "title": "computeStats() is 84 lines",
       "message": "computeStats() in src/core/metrics.ts runs for 84 lines, past the 80-line limit. Long functions are hard to test and tend to hide more than one job.",
       "suggestion": "Pull the distinct steps out into named helpers.",
@@ -125,11 +125,11 @@
     },
     {
       "id": "complexity/high-complexity",
-      "fingerprint": "677bd6ba329b",
+      "fingerprint": "39c3173c9583",
       "severity": "warning",
       "category": "complexity",
       "file": "src/core/metrics.ts",
-      "line": 30,
+      "line": 26,
       "title": "computeStats() has a complexity of 21",
       "message": "computeStats() contains 21 independent branches (limit 15). Every branch is another path a change can break and another case tests must cover.",
       "suggestion": "Flatten early returns, or move each branch group into its own function.",
@@ -151,11 +151,11 @@
     },
     {
       "id": "complexity/high-complexity",
-      "fingerprint": "9f85e6785262",
+      "fingerprint": "fdd728da9630",
       "severity": "warning",
       "category": "complexity",
       "file": "src/languages/typescript.ts",
-      "line": 223,
+      "line": 227,
       "title": "visit() has a complexity of 18",
       "message": "visit() contains 18 independent branches (limit 15). Every branch is another path a change can break and another case tests must cover.",
       "suggestion": "Flatten early returns, or move each branch group into its own function.",
@@ -181,14 +181,14 @@
       "severity": "warning",
       "category": "complexity",
       "file": "src/output/report.ts",
-      "title": "src/output/report.ts is 540 lines",
+      "title": "src/output/report.ts is 542 lines",
       "message": "This file is over the 500-line budget configured for the project. Large files are the usual place where unrelated responsibilities pile up.",
       "detail": [
-        "43 functions, 445 lines of code"
+        "43 functions, 447 lines of code"
       ],
       "suggestion": "Split the file along its clearest seam — usually one exported concept per file.",
       "baseline": 500,
-      "current": 540
+      "current": 542
     },
     {
       "id": "complexity/high-complexity",
@@ -255,11 +255,11 @@
     },
     {
       "id": "complexity/deep-nesting",
-      "fingerprint": "202035072024",
+      "fingerprint": "d2974e3f9c54",
       "severity": "info",
       "category": "complexity",
       "file": "src/core/metrics.ts",
-      "line": 30,
+      "line": 26,
       "title": "computeStats() nests 5 levels deep",
       "message": "Control flow in computeStats() reaches 5 levels (limit 4).",
       "suggestion": "Return early on the failure cases so the happy path stays at the top level.",
@@ -281,11 +281,11 @@
     },
     {
       "id": "complexity/deep-nesting",
-      "fingerprint": "0827d302d880",
+      "fingerprint": "29afacd39166",
       "severity": "info",
       "category": "complexity",
       "file": "src/graph/dependency-graph.ts",
-      "line": 201,
+      "line": 198,
       "title": "buildDependencyGraph() nests 5 levels deep",
       "message": "Control flow in buildDependencyGraph() reaches 5 levels (limit 4).",
       "suggestion": "Return early on the failure cases so the happy path stays at the top level.",
@@ -294,11 +294,11 @@
     },
     {
       "id": "complexity/too-many-params",
-      "fingerprint": "af00dc11092c",
+      "fingerprint": "b945de84ea77",
       "severity": "info",
       "category": "complexity",
       "file": "src/languages/typescript.ts",
-      "line": 204,
+      "line": 208,
       "title": "push() takes 6 parameters",
       "message": "push() has 6 parameters (limit 5), which is easy to call wrongly.",
       "suggestion": "Group related parameters into a single options object.",
@@ -307,11 +307,11 @@
     },
     {
       "id": "complexity/deep-nesting",
-      "fingerprint": "6118ef5644aa",
+      "fingerprint": "ca9f8b759e62",
       "severity": "info",
       "category": "complexity",
       "file": "src/languages/typescript.ts",
-      "line": 223,
+      "line": 227,
       "title": "visit() nests 6 levels deep",
       "message": "Control flow in visit() reaches 6 levels (limit 4).",
       "suggestion": "Return early on the failure cases so the happy path stays at the top level.",
@@ -327,14 +327,14 @@
       "maxComplexity": 11
     },
     "src/baseline/baseline.ts": {
-      "lines": 111,
-      "sloc": 88,
+      "lines": 114,
+      "sloc": 91,
       "functions": 11,
       "maxComplexity": 7
     },
     "src/baseline/history.ts": {
-      "lines": 68,
-      "sloc": 51,
+      "lines": 66,
+      "sloc": 49,
       "functions": 4,
       "maxComplexity": 4
     },
@@ -369,8 +369,8 @@
       "maxComplexity": 11
     },
     "src/cli/commands/init.ts": {
-      "lines": 287,
-      "sloc": 242,
+      "lines": 285,
+      "sloc": 240,
       "functions": 18,
       "maxComplexity": 18
     },
@@ -411,13 +411,13 @@
       "maxComplexity": 19
     },
     "src/cli/runtime.ts": {
-      "lines": 82,
+      "lines": 88,
       "sloc": 63,
       "functions": 13,
       "maxComplexity": 3
     },
     "src/cli/watch-runtime.ts": {
-      "lines": 127,
+      "lines": 124,
       "sloc": 78,
       "functions": 9,
       "maxComplexity": 9
@@ -429,14 +429,14 @@
       "maxComplexity": 2
     },
     "src/config/load.ts": {
-      "lines": 146,
-      "sloc": 102,
+      "lines": 144,
+      "sloc": 100,
       "functions": 9,
       "maxComplexity": 12
     },
     "src/config/schema.ts": {
-      "lines": 85,
-      "sloc": 53,
+      "lines": 83,
+      "sloc": 51,
       "functions": 1,
       "maxComplexity": 1
     },
@@ -447,7 +447,7 @@
       "maxComplexity": 10
     },
     "src/core/cache.ts": {
-      "lines": 126,
+      "lines": 125,
       "sloc": 78,
       "functions": 9,
       "maxComplexity": 7
@@ -459,8 +459,8 @@
       "maxComplexity": 10
     },
     "src/core/metrics.ts": {
-      "lines": 178,
-      "sloc": 144,
+      "lines": 174,
+      "sloc": 140,
       "functions": 11,
       "maxComplexity": 21
     },
@@ -477,7 +477,7 @@
       "maxComplexity": 0
     },
     "src/detect/dependencies.ts": {
-      "lines": 103,
+      "lines": 101,
       "sloc": 73,
       "functions": 8,
       "maxComplexity": 2
@@ -489,20 +489,20 @@
       "maxComplexity": 10
     },
     "src/git/git.ts": {
-      "lines": 307,
-      "sloc": 236,
+      "lines": 308,
+      "sloc": 237,
       "functions": 29,
       "maxComplexity": 13
     },
     "src/graph/cycles.ts": {
-      "lines": 68,
-      "sloc": 46,
+      "lines": 71,
+      "sloc": 49,
       "functions": 5,
       "maxComplexity": 8
     },
     "src/graph/dependency-graph.ts": {
-      "lines": 258,
-      "sloc": 174,
+      "lines": 255,
+      "sloc": 172,
       "functions": 17,
       "maxComplexity": 14
     },
@@ -513,8 +513,8 @@
       "maxComplexity": 14
     },
     "src/graph/scc.ts": {
-      "lines": 97,
-      "sloc": 71,
+      "lines": 101,
+      "sloc": 75,
       "functions": 2,
       "maxComplexity": 10
     },
@@ -525,8 +525,8 @@
       "maxComplexity": 0
     },
     "src/languages/adapter.ts": {
-      "lines": 77,
-      "sloc": 53,
+      "lines": 79,
+      "sloc": 55,
       "functions": 4,
       "maxComplexity": 9
     },
@@ -543,14 +543,14 @@
       "maxComplexity": 2
     },
     "src/languages/python.ts": {
-      "lines": 157,
-      "sloc": 128,
+      "lines": 155,
+      "sloc": 126,
       "functions": 14,
       "maxComplexity": 6
     },
     "src/languages/typescript.ts": {
-      "lines": 465,
-      "sloc": 385,
+      "lines": 469,
+      "sloc": 389,
       "functions": 41,
       "maxComplexity": 18
     },
@@ -567,20 +567,20 @@
       "maxComplexity": 7
     },
     "src/output/report.ts": {
-      "lines": 540,
-      "sloc": 445,
+      "lines": 542,
+      "sloc": 447,
       "functions": 43,
       "maxComplexity": 14
     },
     "src/output/theme.ts": {
-      "lines": 71,
-      "sloc": 51,
+      "lines": 69,
+      "sloc": 49,
       "functions": 6,
       "maxComplexity": 3
     },
     "src/output/ui.ts": {
-      "lines": 139,
-      "sloc": 104,
+      "lines": 137,
+      "sloc": 102,
       "functions": 14,
       "maxComplexity": 8
     },
@@ -609,13 +609,13 @@
       "maxComplexity": 11
     },
     "src/review/map.ts": {
-      "lines": 227,
-      "sloc": 173,
+      "lines": 231,
+      "sloc": 177,
       "functions": 24,
       "maxComplexity": 12
     },
     "src/review/review.ts": {
-      "lines": 115,
+      "lines": 114,
       "sloc": 86,
       "functions": 5,
       "maxComplexity": 14
@@ -627,13 +627,13 @@
       "maxComplexity": 4
     },
     "src/review/test-gap.ts": {
-      "lines": 283,
-      "sloc": 205,
+      "lines": 281,
+      "sloc": 203,
       "functions": 22,
       "maxComplexity": 12
     },
     "src/rules/architecture.ts": {
-      "lines": 256,
+      "lines": 255,
       "sloc": 208,
       "functions": 14,
       "maxComplexity": 11
@@ -657,8 +657,8 @@
       "maxComplexity": 8
     },
     "src/rules/index.ts": {
-      "lines": 37,
-      "sloc": 32,
+      "lines": 35,
+      "sloc": 30,
       "functions": 2,
       "maxComplexity": 1
     },
@@ -669,8 +669,8 @@
       "maxComplexity": 9
     },
     "src/rules/maintainability.ts": {
-      "lines": 177,
-      "sloc": 138,
+      "lines": 175,
+      "sloc": 136,
       "functions": 15,
       "maxComplexity": 14
     },
@@ -687,8 +687,8 @@
       "maxComplexity": 8
     },
     "src/utils/glob.ts": {
-      "lines": 112,
-      "sloc": 81,
+      "lines": 110,
+      "sloc": 79,
       "functions": 8,
       "maxComplexity": 8
     },
@@ -699,8 +699,8 @@
       "maxComplexity": 1
     },
     "src/utils/paths.ts": {
-      "lines": 38,
-      "sloc": 27,
+      "lines": 34,
+      "sloc": 23,
       "functions": 7,
       "maxComplexity": 2
     },

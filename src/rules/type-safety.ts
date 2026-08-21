@@ -1,9 +1,9 @@
 import type { Finding, Marker } from '../core/types.js';
 import { createFinding, type Rule } from '../core/context.js';
 
-function markersOf(kinds: Marker['kind'][], markers: Marker[]): Marker[] {
+const markersOf = (kinds: Marker['kind'][], markers: Marker[]): Marker[] => {
   return markers.filter((marker) => kinds.includes(marker.kind));
-}
+};
 
 const explicitAny: Rule = {
   id: 'type-safety/explicit-any',

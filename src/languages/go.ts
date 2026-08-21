@@ -17,7 +17,7 @@ const DECISION_RE = /(^|\s)(if|for|case|select|&&|\|\|)(\s|\{|$)/g;
 const DISCARDED_RE =
   /(^|[\s(])_\s*(?:,\s*[\w.]+\s*)?(?::=|=)\s*[\w.]+\(|,\s*_\s*(?::=|=)\s*[\w.]+\(/;
 
-function collectImports(lines: string[]): ImportRef[] {
+const collectImports = (lines: string[]): ImportRef[] => {
   const imports: ImportRef[] = [];
   let inGroup = false;
 
@@ -45,9 +45,9 @@ function collectImports(lines: string[]): ImportRef[] {
   });
 
   return imports;
-}
+};
 
-function collectFunctions(lines: string[]): FunctionInfo[] {
+const collectFunctions = (lines: string[]): FunctionInfo[] => {
   const functions: FunctionInfo[] = [];
 
   lines.forEach((line, index) => {
@@ -98,9 +98,9 @@ function collectFunctions(lines: string[]): FunctionInfo[] {
   });
 
   return functions;
-}
+};
 
-function collectMarkers(lines: string[]): Marker[] {
+const collectMarkers = (lines: string[]): Marker[] => {
   const markers: Marker[] = [];
   lines.forEach((line, index) => {
     const trimmed = line.trim();
@@ -110,7 +110,7 @@ function collectMarkers(lines: string[]): Marker[] {
     }
   });
   return markers;
-}
+};
 
 export const goAdapter: LanguageAdapter = {
   language: 'go',

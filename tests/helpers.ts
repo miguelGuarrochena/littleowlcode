@@ -7,23 +7,23 @@ import type { Finding } from '../src/core/types.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-export function fixture(name: string): string {
+export const fixture = (name: string): string => {
   return path.join(here, 'fixtures', name);
-}
+};
 
 /** Runs a full analysis on a fixture with the parse cache disabled. */
-export function analyzeFixture(name: string, config: LittleOwlConfig = {}): Promise<Analysis> {
+export const analyzeFixture = (name: string, config: LittleOwlConfig = {}): Promise<Analysis> => {
   return analyzeProject({
     root: fixture(name),
     config: resolveConfig(config),
     cache: false,
   });
-}
+};
 
-export function findingIds(findings: Finding[]): string[] {
+export const findingIds = (findings: Finding[]): string[] => {
   return findings.map((finding) => finding.id);
-}
+};
 
-export function findingsFor(findings: Finding[], id: string): Finding[] {
+export const findingsFor = (findings: Finding[], id: string): Finding[] => {
   return findings.filter((finding) => finding.id === id);
-}
+};

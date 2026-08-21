@@ -4,27 +4,23 @@ import { findCycles } from '../src/graph/cycles.js';
 import { TempProject } from './temp-project.js';
 
 /**
- * Import-depth regression tests.
+ * Import depth.
  *
- * The original implementation walked every *path* through the graph rather
- * than every node, so a graph with any branching was explored exponentially: a
- * 30-node graph with out-degree 3 took about six seconds, and a 40-node one
- * never finished. Because the depth feeds the dependency score, every command
- * paid that cost, and no fixture in the suite was branchy enough to notice.
- *
- * These tests pin both halves of the fix: the answers must not change, and the
- * work must stay proportional to nodes and edges.
+ * Depth feeds the dependency score, so every command pays for it. Walking
+ * paths rather than nodes explores a branching graph exponentially, and these
+ * pin both halves of the contract: the answers, and the work staying
+ * proportional to nodes and edges.
  */
 
-function graphOf(edges: Array<[string, string]>, nodes: string[] = []): DependencyGraph {
+const graphOf = (edges: Array<[string, string]>, nodes: string[] = []): DependencyGraph => {
   const graph = new DependencyGraph();
   for (const node of nodes) graph.addNode(node);
   for (const [from, to] of edges) graph.addEdge({ from, to, line: 1, typeOnly: false });
   return graph;
-}
+};
 
-/** `m0 -> m1, m2, m3`, `m1 -> m2, m3, m4`, … — the shape that used to explode. */
-function branchingGraph(size: number, outDegree = 3): DependencyGraph {
+/** `m0 -> m1, m2, m3`, `m1 -> m2, m3, m4`, … — branching, with a long spine. */
+const branchingGraph = (size: number, outDegree = 3): DependencyGraph => {
   const edges: Array<[string, string]> = [];
   for (let index = 0; index < size; index += 1) {
     for (let step = 1; step <= outDegree; step += 1) {
@@ -33,7 +29,7 @@ function branchingGraph(size: number, outDegree = 3): DependencyGraph {
     }
   }
   return graphOf(edges, [`m${size - 1}`]);
-}
+};
 
 describe('import depth', () => {
   it('counts edges along the longest chain', () => {
@@ -127,11 +123,10 @@ describe('import depth', () => {
 });
 
 describe('import depth performance', () => {
-  it('stays linear on a branching graph that would explode path by path', () => {
-    // 30 nodes, out-degree 3. Small enough that the old implementation still
-    // *finished* — in roughly six seconds — so this fails with a real
-    // assertion rather than hanging the run. At 40 nodes the same shape did
-    // not finish in three minutes, which is why the size is pinned here.
+  it('stays linear on a branching graph rather than growing with its paths', () => {
+    // 30 nodes at out-degree 3: enough paths that a path-walking traversal
+    // takes seconds, few enough that it still returns. Larger sizes hang
+    // instead of failing, which is why this one is pinned.
     const graph = branchingGraph(30);
 
     const started = Date.now();
@@ -172,8 +167,6 @@ describe('import depth performance', () => {
 describe('large project analysis', () => {
   it('analyses a branching project end to end', async () => {
     // The same shape as above, but as real files through the real pipeline.
-    // At 150 modules with out-degree 3 the previous implementation could not
-    // finish `check` at all.
     const files: Record<string, string> = { 'package.json': '{"name":"branching"}' };
     const size = 150;
 

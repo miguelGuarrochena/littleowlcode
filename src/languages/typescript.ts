@@ -23,7 +23,7 @@ const SERVER_ONLY_MODULES = [
   'nodemailer',
 ];
 
-function createSourceFile(input: ParseInput): ts.SourceFile {
+const createSourceFile = (input: ParseInput): ts.SourceFile => {
   const isTsx = input.path.endsWith('.tsx') || input.path.endsWith('.jsx');
   return ts.createSourceFile(
     input.path,
@@ -32,9 +32,9 @@ function createSourceFile(input: ParseInput): ts.SourceFile {
     /* setParentNodes */ true,
     isTsx ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
-}
+};
 
-function isFunctionLike(node: ts.Node): node is ts.SignatureDeclaration {
+const isFunctionLike = (node: ts.Node): node is ts.SignatureDeclaration => {
   return (
     ts.isFunctionDeclaration(node) ||
     ts.isFunctionExpression(node) ||
@@ -44,9 +44,9 @@ function isFunctionLike(node: ts.Node): node is ts.SignatureDeclaration {
     ts.isGetAccessorDeclaration(node) ||
     ts.isSetAccessorDeclaration(node)
   );
-}
+};
 
-function functionName(node: ts.Node): string {
+const functionName = (node: ts.Node): string => {
   if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) {
     return node.name?.getText() ?? '<anonymous>';
   }
@@ -66,13 +66,13 @@ function functionName(node: ts.Node): string {
     return `${callee}(...)`;
   }
   return '<anonymous>';
-}
+};
 
 /**
  * Cyclomatic complexity of a single function body, not counting nested
  * function declarations — those are measured on their own.
  */
-function measureBody(body: ts.Node): { complexity: number; maxNesting: number } {
+const measureBody = (body: ts.Node): { complexity: number; maxNesting: number } => {
   let complexity = 1;
   let maxNesting = 0;
 
@@ -121,9 +121,9 @@ function measureBody(body: ts.Node): { complexity: number; maxNesting: number } 
 
   body.forEachChild((child) => visit(child, 0));
   return { complexity, maxNesting };
-}
+};
 
-function returnsJsx(node: ts.Node): boolean {
+const returnsJsx = (node: ts.Node): boolean => {
   let found = false;
   const visit = (current: ts.Node): void => {
     if (found) return;
@@ -139,9 +139,9 @@ function returnsJsx(node: ts.Node): boolean {
   };
   visit(node);
   return found;
-}
+};
 
-function collectFunctions(source: ts.SourceFile): FunctionInfo[] {
+const collectFunctions = (source: ts.SourceFile): FunctionInfo[] => {
   const functions: FunctionInfo[] = [];
 
   const visit = (node: ts.Node): void => {
@@ -170,10 +170,12 @@ function collectFunctions(source: ts.SourceFile): FunctionInfo[] {
 
   source.forEachChild(visit);
   return functions;
-}
+};
 
 /** What an import statement actually takes out of the module. */
-function bindingOf(clause: ts.ImportClause | undefined): { names?: string[]; wildcard?: boolean } {
+const bindingOf = (
+  clause: ts.ImportClause | undefined,
+): { names?: string[]; wildcard?: boolean } => {
   if (!clause) return { wildcard: true }; // `import './side-effect'`
 
   const bindings = clause.namedBindings;
@@ -187,18 +189,20 @@ function bindingOf(clause: ts.ImportClause | undefined): { names?: string[]; wil
       names.push((element.propertyName ?? element.name).text);
   }
   return { names };
-}
+};
 
 /** The same question for `export … from './x'`. */
-function reExportBindingOf(clause: ts.NamedExportBindings | undefined): {
+const reExportBindingOf = (
+  clause: ts.NamedExportBindings | undefined,
+): {
   names?: string[];
   wildcard?: boolean;
-} {
+} => {
   if (!clause || !ts.isNamedExports(clause)) return { wildcard: true };
   return { names: clause.elements.map((element) => (element.propertyName ?? element.name).text) };
-}
+};
 
-function collectImports(source: ts.SourceFile): ImportRef[] {
+const collectImports = (source: ts.SourceFile): ImportRef[] => {
   const imports: ImportRef[] = [];
 
   const push = (
@@ -266,9 +270,9 @@ function collectImports(source: ts.SourceFile): ImportRef[] {
 
   source.forEachChild(visit);
   return imports;
-}
+};
 
-function collectExports(source: ts.SourceFile): string[] {
+const collectExports = (source: ts.SourceFile): string[] => {
   const names: string[] = [];
 
   const hasExportModifier = (node: ts.Node): boolean =>
@@ -304,9 +308,9 @@ function collectExports(source: ts.SourceFile): string[] {
   });
 
   return names;
-}
+};
 
-function collectMarkers(source: ts.SourceFile, content: string, isTs: boolean): Marker[] {
+const collectMarkers = (source: ts.SourceFile, content: string, isTs: boolean): Marker[] => {
   const markers: Marker[] = [];
   const lineOf = (position: number): number =>
     source.getLineAndCharacterOfPosition(position).line + 1;
@@ -352,7 +356,7 @@ function collectMarkers(source: ts.SourceFile, content: string, isTs: boolean): 
   }
 
   return markers;
-}
+};
 
 interface CommentRange {
   text: string;
@@ -366,7 +370,7 @@ interface CommentRange {
  * which is exactly what happens in code that talks *about* suppressions, this
  * file included.
  */
-function comments(source: ts.SourceFile, content: string): CommentRange[] {
+const comments = (source: ts.SourceFile, content: string): CommentRange[] => {
   const found: CommentRange[] = [];
   const scanner = ts.createScanner(
     ts.ScriptTarget.Latest,
@@ -387,13 +391,13 @@ function comments(source: ts.SourceFile, content: string): CommentRange[] {
   }
 
   return found;
-}
+};
 
 /**
  * Lines where `useEffect` is called without a dependency array, meaning the
  * effect re-runs after every single render.
  */
-function collectEffectsWithoutDeps(source: ts.SourceFile): number[] {
+const collectEffectsWithoutDeps = (source: ts.SourceFile): number[] => {
   const lines: number[] = [];
 
   const visit = (node: ts.Node): void => {
@@ -410,9 +414,9 @@ function collectEffectsWithoutDeps(source: ts.SourceFile): number[] {
 
   source.forEachChild(visit);
   return lines;
-}
+};
 
-function parseTypeScriptLike(input: ParseInput, isTs: boolean): ParsedFile {
+const parseTypeScriptLike = (input: ParseInput, isTs: boolean): ParsedFile => {
   const source = createSourceFile(input);
   const lines = input.content.split('\n');
   const imports = collectImports(source);
@@ -447,7 +451,7 @@ function parseTypeScriptLike(input: ParseInput, isTs: boolean): ParsedFile {
         .map((reference) => reference.raw),
     },
   };
-}
+};
 
 export const typeScriptAdapter: LanguageAdapter = {
   language: 'typescript',

@@ -21,9 +21,9 @@ const LANGUAGE_BY_EXTENSION: Record<string, Language> = {
 
 export const SOURCE_EXTENSIONS = Object.keys(LANGUAGE_BY_EXTENSION);
 
-export function languageOf(file: string): Language {
+export const languageOf = (file: string): Language => {
   return LANGUAGE_BY_EXTENSION[path.extname(file).toLowerCase()] ?? 'unknown';
-}
+};
 
 /** Directories skipped before we even stat their contents, for speed. */
 const HARD_SKIP = new Set([
@@ -70,11 +70,11 @@ export interface ScanResult {
  * Walks the project and returns repo-relative POSIX paths of source files,
  * sorted so that every run produces the same order.
  */
-export function scanFiles(
+export const scanFiles = (
   root: string,
   config: ResolvedConfig,
   options: ScanOptions = {},
-): ScanResult {
+): ScanResult => {
   const maxFiles = options.maxFiles ?? MAX_SCANNED_FILES;
   const ignore = [...config.ignore, ...readGitignore(root)].map(compilePattern);
   const include = config.include.map(compilePattern);
@@ -118,7 +118,7 @@ export function scanFiles(
   walk(root);
   files.sort();
   return { files, truncated };
-}
+};
 
 /**
  * Whether a directory entry is a file worth reading.
@@ -129,7 +129,7 @@ export function scanFiles(
  * are followed — a linked directory is still skipped, so a link pointing back
  * up the tree cannot make the walk loop.
  */
-function isReadableFile(entry: fs.Dirent, absolute: string): boolean {
+const isReadableFile = (entry: fs.Dirent, absolute: string): boolean => {
   if (entry.isFile()) return true;
   if (!entry.isSymbolicLink()) return false;
 
@@ -139,14 +139,14 @@ function isReadableFile(entry: fs.Dirent, absolute: string): boolean {
     // A broken link points at nothing worth analysing.
     return false;
   }
-}
+};
 
 /**
  * Reads the root `.gitignore` and converts it into glob patterns. This is a
  * pragmatic subset — enough to avoid analysing generated output that projects
  * already exclude from version control.
  */
-export function readGitignore(root: string): string[] {
+export const readGitignore = (root: string): string[] => {
   const file = path.join(root, '.gitignore');
   if (!fs.existsSync(file)) return [];
 
@@ -164,8 +164,8 @@ export function readGitignore(root: string): string[] {
     }
   }
   return patterns;
-}
+};
 
-export function isIgnored(relative: string, patterns: CompiledPattern[]): boolean {
+export const isIgnored = (relative: string, patterns: CompiledPattern[]): boolean => {
   return matchesCompiled(relative, patterns);
-}
+};

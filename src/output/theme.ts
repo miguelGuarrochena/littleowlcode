@@ -30,15 +30,15 @@ export const severityIcon: Record<ReportedSeverity, string> = {
   info: '🔵',
 };
 
-export function severityColor(severity: ReportedSeverity): (text: string) => string {
+export const severityColor = (severity: ReportedSeverity): ((text: string) => string) => {
   if (severity === 'error') return pc.red;
   if (severity === 'warning') return pc.yellow;
   return pc.blue;
-}
+};
 
-export function severityLabel(severity: ReportedSeverity): string {
+export const severityLabel = (severity: ReportedSeverity): string => {
   return severity === 'error' ? 'critical' : severity === 'warning' ? 'warning' : 'info';
-}
+};
 
 export const statusText: Record<ReviewStatus, string> = {
   healthy: 'HEALTHY',
@@ -46,25 +46,23 @@ export const statusText: Record<ReviewStatus, string> = {
   degraded: 'DEGRADED',
 };
 
-export function statusColor(status: ReviewStatus): (text: string) => string {
+export const statusColor = (status: ReviewStatus): ((text: string) => string) => {
   if (status === 'degraded') return pc.red;
   if (status === 'needs-review') return pc.yellow;
   return pc.green;
-}
+};
 
-export function statusIcon(status: ReviewStatus): string {
+export const statusIcon = (status: ReviewStatus): string => {
   if (status === 'degraded') return icons.error;
   if (status === 'needs-review') return icons.warn;
   return icons.ok;
-}
+};
 
 /** Colour for a score, using the same thresholds everywhere. */
-export function scoreColor(score: number): (text: string) => string {
+export const scoreColor = (score: number): ((text: string) => string) => {
   if (score >= 85) return pc.green;
   if (score >= 70) return pc.yellow;
   return pc.red;
-}
+};
 
-export function dim(text: string): string {
-  return pc.dim(text);
-}
+export const dim = (text: string): string => pc.dim(text);

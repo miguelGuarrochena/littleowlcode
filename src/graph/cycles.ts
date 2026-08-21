@@ -12,7 +12,7 @@ export interface Cycle {
  * Type-only edges are excluded: `import type` is erased at build time and does
  * not create a runtime cycle, so reporting it would be noise.
  */
-export function findCycles(graph: DependencyGraph, includeTypeOnly = false): Cycle[] {
+export const findCycles = (graph: DependencyGraph, includeTypeOnly = false): Cycle[] => {
   const adjacency = buildAdjacency(graph, includeTypeOnly);
 
   const cycles: Cycle[] = [];
@@ -24,9 +24,12 @@ export function findCycles(graph: DependencyGraph, includeTypeOnly = false): Cyc
 
   cycles.sort((a, b) => a.files.join('>').localeCompare(b.files.join('>')));
   return cycles;
-}
+};
 
-function buildAdjacency(graph: DependencyGraph, includeTypeOnly: boolean): Map<string, string[]> {
+const buildAdjacency = (
+  graph: DependencyGraph,
+  includeTypeOnly: boolean,
+): Map<string, string[]> => {
   const adjacency = new Map<string, string[]>();
   for (const node of graph.nodes()) adjacency.set(node, []);
   for (const edge of graph.edges) {
@@ -36,13 +39,13 @@ function buildAdjacency(graph: DependencyGraph, includeTypeOnly: boolean): Map<s
   }
   for (const list of adjacency.values()) list.sort();
   return adjacency;
-}
+};
 
 /**
  * Pulls one concrete cycle out of a strongly connected component so the report
  * can show `a -> b -> c -> a` rather than an unordered set of files.
  */
-function extractCyclePath(component: string[], adjacency: Map<string, string[]>): string[] {
+const extractCyclePath = (component: string[], adjacency: Map<string, string[]>): string[] => {
   const members = new Set(component);
   const start = [...component].sort()[0]!;
   const path: string[] = [];
@@ -64,4 +67,4 @@ function extractCyclePath(component: string[], adjacency: Map<string, string[]>)
   };
 
   return walk(start) ? path : [...component].sort();
-}
+};

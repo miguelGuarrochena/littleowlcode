@@ -223,7 +223,7 @@ describe('change impact', () => {
 });
 
 describe('prompt generation', () => {
-  function reviewWith(findings: Finding[], scope?: string[]): ReviewResult {
+  const reviewWith = (findings: Finding[], scope?: string[]): ReviewResult => {
     return {
       status: 'degraded',
       current: {
@@ -250,7 +250,7 @@ describe('prompt generation', () => {
       scope: scope ? { patterns: scope, inScope: [], outOfScope: ['other/x.ts'] } : null,
       drift: null,
     };
-  }
+  };
 
   it('turns findings into numbered instructions and keeps the scope constraint', () => {
     const prompt = generatePrompt(
@@ -394,8 +394,8 @@ describe('ci gate', () => {
 });
 
 /**
- * Without a baseline every pre-existing finding counts as "new", which used to
- * greet a perfectly healthy first run with NEEDS REVIEW.
+ * Without a baseline there is no change to judge, so the status has to describe
+ * the code rather than counting pre-existing findings against it.
  */
 describe('review status without a baseline', () => {
   const warning: Finding = {

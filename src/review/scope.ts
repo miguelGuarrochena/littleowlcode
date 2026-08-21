@@ -6,7 +6,7 @@ import { compilePattern, matchesCompiled } from '../utils/glob.js';
  * touched. This is the guardrail for "I asked the assistant to fix orders and
  * it also rewrote authentication".
  */
-export function checkScope(changes: ChangeSet, patterns: string[]): ScopeResult | null {
+export const checkScope = (changes: ChangeSet, patterns: string[]): ScopeResult | null => {
   if (patterns.length === 0) return null;
 
   const compiled = patterns.map(compilePattern);
@@ -19,13 +19,13 @@ export function checkScope(changes: ChangeSet, patterns: string[]): ScopeResult 
   }
 
   return { patterns, inScope: inScope.sort(), outOfScope: outOfScope.sort() };
-}
+};
 
 /**
  * Groups out-of-scope files by their top two path segments, so the report can
  * say "3 files under features/auth" instead of listing every file.
  */
-export function groupByArea(files: string[]): Array<{ area: string; files: string[] }> {
+export const groupByArea = (files: string[]): Array<{ area: string; files: string[] }> => {
   const groups = new Map<string, string[]>();
 
   for (const file of files) {
@@ -39,4 +39,4 @@ export function groupByArea(files: string[]): Array<{ area: string; files: strin
   return [...groups.entries()]
     .map(([area, groupFiles]) => ({ area, files: groupFiles.sort() }))
     .sort((a, b) => (a.area < b.area ? -1 : 1));
-}
+};

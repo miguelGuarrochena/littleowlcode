@@ -81,23 +81,23 @@ const NOT_USUALLY_TESTED = [
  * Files with no logic worth testing: pure re-exports, type declarations and
  * constant tables. Flagging these would be noise.
  */
-function hasBehaviour(file: ParsedFile): boolean {
+const hasBehaviour = (file: ParsedFile): boolean => {
   if (file.functions.length === 0) return false;
   // A barrel file re-exports and does nothing else.
   const onlyReExports = file.imports.every((reference) => reference.kind === 'export-from');
   if (onlyReExports && file.imports.length > 0 && file.functions.length === 0) return false;
   return file.functions.some((fn) => fn.complexity > 1 || fn.lines > 5);
-}
+};
 
 export interface TestGapOptions {
   /** Restrict the analysis to these files. Defaults to everything. */
   files?: string[];
 }
 
-export function analyzeTestGaps(
+export const analyzeTestGaps = (
   context: AnalysisContext,
   options: TestGapOptions = {},
-): TestGapReport {
+): TestGapReport => {
   const testFiles = context.files.filter((file) => file.isTest);
   const subjects = context.files.filter((file) => {
     if (file.isTest) return false;
@@ -174,10 +174,10 @@ export function analyzeTestGaps(
     covered: covered.sort(),
     skipped: skipped.sort(),
   };
-}
+};
 
 /** Everything a file imports, transitively. */
-function reachableFrom(context: AnalysisContext, start: string): Set<string> {
+const reachableFrom = (context: AnalysisContext, start: string): Set<string> => {
   const seen = new Set<string>();
   const queue = [start];
 
@@ -191,10 +191,10 @@ function reachableFrom(context: AnalysisContext, start: string): Set<string> {
   }
 
   return seen;
-}
+};
 
 /** `orders.ts` -> `orders.test.ts` in the same directory, if it exists. */
-function siblingTestFor(context: AnalysisContext, file: string): string | null {
+const siblingTestFor = (context: AnalysisContext, file: string): string | null => {
   const directory = dirOf(file);
   const stem = basename(file).replace(/\.[cm]?[jt]sx?$|\.py$|\.go$/, '');
 
@@ -211,16 +211,16 @@ function siblingTestFor(context: AnalysisContext, file: string): string | null {
   }
 
   return null;
-}
+};
 
 /** Exported functions and components — the behaviour other code depends on. */
-function exportedBehaviour(file: ParsedFile): string[] {
+const exportedBehaviour = (file: ParsedFile): string[] => {
   const exported = new Set(file.exports);
   return file.functions
     .filter((fn) => exported.has(fn.name) && (fn.complexity > 1 || fn.lines > 5))
     .map((fn) => fn.name)
     .sort();
-}
+};
 
 /**
  * Whether a test file names a given export.
@@ -230,22 +230,22 @@ function exportedBehaviour(file: ParsedFile): string[] {
  * can exercise code without writing its name — so it only ever downgrades a
  * module to "partial", never to "untested".
  */
-function mentions(
+const mentions = (
   context: AnalysisContext,
   testFile: string,
   name: string,
   cache: Map<string, string | null>,
-): boolean {
+): boolean => {
   const source = testSource(context, testFile, cache);
   if (!source) return true; // Unreadable: assume covered rather than cry wolf.
   return new RegExp(`\\b${escapeForRegExp(name)}\\b`).test(source);
-}
+};
 
-function testSource(
+const testSource = (
   context: AnalysisContext,
   testFile: string,
   cache: Map<string, string | null>,
-): string | null {
+): string | null => {
   const cached = cache.get(testFile);
   if (cached !== undefined) return cached;
 
@@ -260,23 +260,21 @@ function testSource(
   }
   cache.set(testFile, content);
   return content;
-}
+};
 
-function escapeForRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+const escapeForRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-function reasonFor(file: ParsedFile): string {
+const reasonFor = (file: ParsedFile): string => {
   const branchiest = [...file.functions].sort((a, b) => b.complexity - a.complexity)[0];
   if (branchiest && branchiest.complexity >= 5) {
     return `${branchiest.name}() has ${branchiest.complexity} branches`;
   }
   return `${file.functions.length} function${file.functions.length === 1 ? '' : 's'} with logic`;
-}
+};
 
 /** Narrows a report to the files a change actually touched. */
-export function changedFilesOf(changes: ChangeSet | null): string[] | undefined {
+export const changedFilesOf = (changes: ChangeSet | null): string[] | undefined => {
   if (!changes) return undefined;
   const files = changes.files.filter((file) => file.status !== 'deleted').map((file) => file.path);
   return files.length > 0 ? files : undefined;
-}
+};

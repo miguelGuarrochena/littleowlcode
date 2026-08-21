@@ -1,5 +1,5 @@
 import { auth } from './auth';
 
-export function currentUser() {
+export const currentUser = () => {
   return auth();
-}
+};

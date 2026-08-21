@@ -21,7 +21,7 @@ import { deadCodeCommand, doctorCommand, mapCommand, testsCommand } from './comm
  * things a developer actually wants to do. Nobody should have to memorise a
  * command to get value out of this tool.
  */
-export async function interactiveCommand(options: GlobalOptions): Promise<number> {
+export const interactiveCommand = async (options: GlobalOptions): Promise<number> => {
   const root = resolveRoot(options);
 
   if (!isInteractive()) {
@@ -118,14 +118,14 @@ export async function interactiveCommand(options: GlobalOptions): Promise<number
     }
     print('');
   }
-}
+};
 
-function printDetection(
+const printDetection = (
   root: string,
   fileCount: number,
   stack: string,
   frameworks: string[],
-): void {
+): void => {
   const good = (text: string): string => `${colors.green(icons.ok)} ${text}`;
 
   if (isGitRepository(root)) print(good('Git repository detected'));
@@ -133,10 +133,10 @@ function printDetection(
   print(good(`${stack}`));
   print(good(`${fileCount} source files`));
   print('');
-}
+};
 
 /** Shown when there is no config and no baseline yet. */
-async function firstRun(options: GlobalOptions): Promise<number> {
+const firstRun = async (options: GlobalOptions): Promise<number> => {
   print(dim('Looks like this is your first time here.'));
   print('');
 
@@ -156,4 +156,4 @@ async function firstRun(options: GlobalOptions): Promise<number> {
   if (choice === 'analyze') return checkCommand(options);
   if (choice === 'configure') return initCommand({ ...options, baseline: false });
   return initCommand(options);
-}
+};

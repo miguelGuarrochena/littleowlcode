@@ -73,7 +73,7 @@ const NOT_A_STARTING_POINT = /^(\.|scripts|bin|tools|public|static|assets|config
 const ENTRY_PATTERNS =
   /(^|\/)(main|index|server|app|cli)\.[cm]?[jt]sx?$|(^|\/)(page|route|layout)\.[cm]?[jt]sx?$|(^|\/)main\.go$|(^|\/)manage\.py$|(^|\/)__main__\.py$/;
 
-export function buildProjectMap(context: AnalysisContext): ProjectMap {
+export const buildProjectMap = (context: AnalysisContext): ProjectMap => {
   const areas = groupIntoAreas(context);
   const external = groupExternalServices(context);
 
@@ -108,13 +108,13 @@ export function buildProjectMap(context: AnalysisContext): ProjectMap {
       edges: context.graph.edges.length,
     },
   };
-}
+};
 
 /**
  * Areas are the second path segment where there is one (`src/services`), which
  * is the level at which most projects are actually organised.
  */
-function groupIntoAreas(context: AnalysisContext): MapArea[] {
+const groupIntoAreas = (context: AnalysisContext): MapArea[] => {
   const buckets = new Map<string, { files: string[]; lines: number }>();
 
   for (const file of context.files) {
@@ -151,18 +151,18 @@ function groupIntoAreas(context: AnalysisContext): MapArea[] {
       outgoing: outgoing.get(path) ?? 0,
     }))
     .sort((a, b) => b.files - a.files || (a.path < b.path ? -1 : 1));
-}
+};
 
-function areaOf(file: string): string {
+const areaOf = (file: string): string => {
   const directory = dirOf(file);
   if (!directory) return '.';
   const parts = segments(directory);
   // `src` alone says nothing; take the segment below it when there is one.
   const depth = parts[0] === 'src' || parts[0] === 'lib' || parts[0] === 'packages' ? 2 : 1;
   return parts.slice(0, depth).join('/');
-}
+};
 
-function groupExternalServices(context: AnalysisContext): ExternalService[] {
+const groupExternalServices = (context: AnalysisContext): ExternalService[] => {
   const usageByPackage = new Map<string, number>();
   for (const packages of context.graph.external.values()) {
     for (const name of packages) {
@@ -187,13 +187,17 @@ function groupExternalServices(context: AnalysisContext): ExternalService[] {
       usedIn: entry.usedIn,
     }))
     .sort((a, b) => b.usedIn - a.usedIn || (a.name < b.name ? -1 : 1));
-}
+};
 
 /**
  * Reading order: start where execution starts, then the areas that most of the
  * codebase depends on.
  */
-function readingOrder(context: AnalysisContext, areas: MapArea[], entryPoints: string[]): string[] {
+const readingOrder = (
+  context: AnalysisContext,
+  areas: MapArea[],
+  entryPoints: string[],
+): string[] => {
   const order: string[] = [];
 
   const entryArea = entryPoints[0] ? areaOf(entryPoints[0]) : null;
@@ -223,4 +227,4 @@ function readingOrder(context: AnalysisContext, areas: MapArea[], entryPoints: s
   }
 
   return order;
-}
+};

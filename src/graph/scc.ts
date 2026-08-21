@@ -22,7 +22,7 @@ interface TarjanState {
  * component is only emitted once everything it can reach has been emitted.
  * Callers that fold values along the graph can rely on that ordering.
  */
-export function stronglyConnectedComponents(adjacency: Map<string, string[]>): string[][] {
+export const stronglyConnectedComponents = (adjacency: Map<string, string[]>): string[][] => {
   const state: TarjanState = {
     index: 0,
     indices: new Map(),
@@ -37,9 +37,13 @@ export function stronglyConnectedComponents(adjacency: Map<string, string[]>): s
   }
 
   return state.components;
-}
+};
 
-function strongConnect(start: string, adjacency: Map<string, string[]>, state: TarjanState): void {
+const strongConnect = (
+  start: string,
+  adjacency: Map<string, string[]>,
+  state: TarjanState,
+): void => {
   const callStack: Array<{ node: string; childIndex: number }> = [{ node: start, childIndex: 0 }];
 
   state.indices.set(start, state.index);
@@ -93,4 +97,4 @@ function strongConnect(start: string, adjacency: Map<string, string[]>, state: T
       state.components.push(component);
     }
   }
-}
+};

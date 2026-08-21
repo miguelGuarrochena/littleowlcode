@@ -19,15 +19,11 @@ const WEIGHTS: Record<keyof Omit<Metrics, 'overall'>, number> = {
   typeSafety: 0.15,
 };
 
-function clampScore(value: number): number {
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
+const clampScore = (value: number): number => Math.max(0, Math.min(100, Math.round(value)));
 
-function ratio(part: number, total: number): number {
-  return total === 0 ? 0 : part / total;
-}
+const ratio = (part: number, total: number): number => (total === 0 ? 0 : part / total);
 
-export function computeStats(context: AnalysisContext, findings: Finding[]): MetricStats {
+export const computeStats = (context: AnalysisContext, findings: Finding[]): MetricStats => {
   const { files, config, graph, layers } = context;
   const sourceFiles = files.filter((file) => !file.isTest);
   const thresholds = config.thresholds;
@@ -110,9 +106,9 @@ export function computeStats(context: AnalysisContext, findings: Finding[]): Met
     unresolvedImports: graph.unresolved.length,
     maxImportDepth,
   };
-}
+};
 
-export function computeMetrics(stats: MetricStats, hasTypeScript: boolean): Metrics {
+export const computeMetrics = (stats: MetricStats, hasTypeScript: boolean): Metrics => {
   // Architecture problems are counted per 100 files so the score reflects
   // density rather than repository size.
   const per100Files = Math.max(1, stats.files / 100);
@@ -161,9 +157,9 @@ export function computeMetrics(stats: MetricStats, hasTypeScript: boolean): Metr
   );
 
   return { overall, architecture, maintainability, complexity, dependencies, typeSafety };
-}
+};
 
-export function fileMetricsOf(files: ParsedFile[]): Record<string, FileMetric> {
+export const fileMetricsOf = (files: ParsedFile[]): Record<string, FileMetric> => {
   const metrics: Record<string, FileMetric> = {};
   for (const file of files) {
     metrics[file.path] = {
@@ -174,4 +170,4 @@ export function fileMetricsOf(files: ParsedFile[]): Record<string, FileMetric> {
     };
   }
   return metrics;
-}
+};

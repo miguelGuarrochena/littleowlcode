@@ -25,7 +25,7 @@ export interface ResolverContext {
 }
 
 /** Reads `paths`/`baseUrl` from tsconfig so aliased imports resolve properly. */
-export function readTsAliases(root: string): AliasRule[] {
+export const readTsAliases = (root: string): AliasRule[] => {
   const configPath = ts.findConfigFile(root, ts.sys.fileExists, 'tsconfig.json');
   if (!configPath) return [];
 
@@ -62,20 +62,20 @@ export function readTsAliases(root: string): AliasRule[] {
   }
 
   return rules;
-}
+};
 
-export function readGoModule(root: string): string | null {
+export const readGoModule = (root: string): string | null => {
   const file = path.join(root, 'go.mod');
   if (!fs.existsSync(file)) return null;
   const match = /^module\s+(\S+)/m.exec(fs.readFileSync(file, 'utf8'));
   return match ? match[1]! : null;
-}
+};
 
-function firstExisting(candidates: string[], files: Set<string>): string | undefined {
+const firstExisting = (candidates: string[], files: Set<string>): string | undefined => {
   return candidates.find((candidate) => files.has(candidate));
-}
+};
 
-function jsCandidates(base: string): string[] {
+const jsCandidates = (base: string): string[] => {
   const candidates: string[] = [base];
   for (const extension of JS_EXTENSIONS) candidates.push(`${base}${extension}`);
   for (const extension of JS_EXTENSIONS) candidates.push(`${base}/index${extension}`);
@@ -85,17 +85,17 @@ function jsCandidates(base: string): string[] {
     for (const extension of JS_EXTENSIONS) candidates.push(`${withoutJs}${extension}`);
   }
   return candidates;
-}
+};
 
-function normalizeJoin(fromDir: string, specifier: string): string {
+const normalizeJoin = (fromDir: string, specifier: string): string => {
   return toPosix(path.posix.normalize(path.posix.join(fromDir, specifier))).replace(/^\.\//, '');
-}
+};
 
-export function resolveJsImport(
+export const resolveJsImport = (
   fromFile: string,
   specifier: string,
   context: ResolverContext,
-): string | undefined {
+): string | undefined => {
   if (specifier.startsWith('.')) {
     const base = normalizeJoin(dirOf(fromFile), specifier);
     return firstExisting(jsCandidates(base), context.files);
@@ -127,9 +127,9 @@ export function resolveJsImport(
   }
 
   return undefined;
-}
+};
 
-export function packageNameOf(specifier: string): string | undefined {
+export const packageNameOf = (specifier: string): string | undefined => {
   if (specifier.startsWith('.') || specifier.startsWith('/')) return undefined;
   if (specifier.startsWith('node:')) return specifier;
   const parts = specifier.split('/');
@@ -137,13 +137,13 @@ export function packageNameOf(specifier: string): string | undefined {
     return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : specifier;
   }
   return parts[0];
-}
+};
 
-export function resolvePythonImport(
+export const resolvePythonImport = (
   fromFile: string,
   specifier: string,
   context: ResolverContext,
-): string | undefined {
+): string | undefined => {
   const pythonCandidates = (base: string): string[] => [`${base}.py`, `${base}/__init__.py`];
 
   if (specifier.startsWith('.')) {
@@ -165,13 +165,13 @@ export function resolvePythonImport(
     if (hit) return hit;
   }
   return undefined;
-}
+};
 
 /**
  * Go imports address packages (directories). We resolve to every non-test file
  * of the target package so the file-level graph still reflects package edges.
  */
-export function resolveGoImport(specifier: string, context: ResolverContext): string[] {
+export const resolveGoImport = (specifier: string, context: ResolverContext): string[] => {
   if (!context.goModule) return [];
   if (specifier !== context.goModule && !specifier.startsWith(`${context.goModule}/`)) return [];
 
@@ -186,13 +186,13 @@ export function resolveGoImport(specifier: string, context: ResolverContext): st
   }
 
   return targets.sort();
-}
+};
 
-export function createResolverContext(
+export const createResolverContext = (
   root: string,
   files: string[],
   languages: Language[],
-): ResolverContext {
+): ResolverContext => {
   const sourceRoots = ['src', 'app', 'lib', 'packages'].filter((dir) =>
     fs.existsSync(path.join(root, dir)),
   );
@@ -207,4 +207,4 @@ export function createResolverContext(
     goModule: readGoModule(root),
     sourceRoots,
   };
-}
+};

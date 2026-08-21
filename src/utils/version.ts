@@ -11,7 +11,7 @@ let cached: string | null = null;
  * different version cannot be trusted, because the rules that produced them may
  * have changed.
  */
-export function readVersion(): string {
+export const readVersion = (): string => {
   if (cached !== null) return cached;
 
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -34,4 +34,4 @@ export function readVersion(): string {
 
   cached = '0.0.0';
   return cached;
-}
+};

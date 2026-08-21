@@ -3,7 +3,7 @@ import { createFinding, type AnalysisContext, type Rule } from '../core/context.
 import { readFileAtRef } from '../git/git.js';
 import { unusedDependencies } from '../detect/dependencies.js';
 
-function baseManifest(context: AnalysisContext): Record<string, string> | null {
+const baseManifest = (context: AnalysisContext): Record<string, string> | null => {
   const base = context.changes?.base;
   if (!base) return null;
   const raw = readFileAtRef(context.root, base, 'package.json');
@@ -17,12 +17,12 @@ function baseManifest(context: AnalysisContext): Record<string, string> | null {
   } catch {
     return null;
   }
-}
+};
 
-function majorOf(range: string): string | null {
+const majorOf = (range: string): string | null => {
   const match = /(\d+)\./.exec(range.replace(/^[\^~>=<\s]*/, ''));
   return match ? match[1]! : null;
-}
+};
 
 const majorVersionChange: Rule = {
   id: 'dependencies/major-version-change',

@@ -29,13 +29,13 @@ const CANDIDATES = [
   '.littleowlrc',
 ];
 
-export function findConfigFile(root: string): string | null {
+export const findConfigFile = (root: string): string | null => {
   for (const candidate of CANDIDATES) {
     const absolute = path.join(root, candidate);
     if (fs.existsSync(absolute)) return absolute;
   }
   return null;
-}
+};
 
 /**
  * Loads and resolves configuration for `root`.
@@ -43,7 +43,7 @@ export function findConfigFile(root: string): string | null {
  * Missing configuration is not an error: Little Owl is designed to be useful on
  * the very first run, before `init` has been executed.
  */
-export async function loadConfig(root: string): Promise<ResolvedConfig> {
+export const loadConfig = async (root: string): Promise<ResolvedConfig> => {
   const file = findConfigFile(root);
   if (!file) return baseConfig('balanced');
 
@@ -51,9 +51,9 @@ export async function loadConfig(root: string): Promise<ResolvedConfig> {
   const resolved = resolveConfig(raw);
   resolved.sourcePath = file;
   return resolved;
-}
+};
 
-async function readConfigFile(file: string): Promise<LittleOwlConfig> {
+const readConfigFile = async (file: string): Promise<LittleOwlConfig> => {
   // A bare `.littleowlrc` is JSON, matching how every other rc file behaves.
   if (file.endsWith('.json') || file.endsWith('.littleowlrc')) {
     try {
@@ -70,10 +70,10 @@ async function readConfigFile(file: string): Promise<LittleOwlConfig> {
     throw new Error(`Config at ${file} did not export an object.`);
   }
   return loaded;
-}
+};
 
 /** Merges a user config on top of the strictness preset it selected. */
-export function resolveConfig(raw: LittleOwlConfig): ResolvedConfig {
+export const resolveConfig = (raw: LittleOwlConfig): ResolvedConfig => {
   const strictness: Strictness = raw.strictness ?? 'balanced';
   const base = baseConfig(strictness);
 
@@ -93,16 +93,14 @@ export function resolveConfig(raw: LittleOwlConfig): ResolvedConfig {
     scope: raw.scope ?? base.scope,
     sourcePath: null,
   };
-}
+};
 
-export function configDir(root: string): string {
-  return path.join(root, CONFIG_DIR);
-}
+export const configDir = (root: string): string => path.join(root, CONFIG_DIR);
 
-export function ensureConfigDir(root: string): string {
+export const ensureConfigDir = (root: string): string => {
   ensureLocalGitignore(root);
   return configDir(root);
-}
+};
 
 /** Entries inside `.little-owl/` that are local state, not project source. */
 const LOCAL_ONLY = ['cache/', 'history.json'];
@@ -118,7 +116,7 @@ const LOCAL_ONLY = ['cache/', 'history.json'];
  *
  * An existing file is never rewritten, only extended with entries it lacks.
  */
-export function ensureLocalGitignore(root: string): void {
+export const ensureLocalGitignore = (root: string): void => {
   const directory = configDir(root);
   const file = path.join(directory, '.gitignore');
 
@@ -142,4 +140,4 @@ export function ensureLocalGitignore(root: string): void {
     // Not being able to write the ignore file is a tidiness problem, never a
     // correctness one. The analysis carries on either way.
   }
-}
+};

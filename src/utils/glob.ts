@@ -8,11 +8,9 @@
 
 const REGEX_SPECIALS = /[.+^$()|[\]\\]/g;
 
-function escapeLiteral(value: string): string {
-  return value.replace(REGEX_SPECIALS, '\\$&');
-}
+const escapeLiteral = (value: string): string => value.replace(REGEX_SPECIALS, '\\$&');
 
-function translate(pattern: string): string {
+const translate = (pattern: string): string => {
   let out = '';
   let i = 0;
 
@@ -58,7 +56,7 @@ function translate(pattern: string): string {
   }
 
   return out;
-}
+};
 
 export interface CompiledPattern {
   source: string;
@@ -66,7 +64,7 @@ export interface CompiledPattern {
   test(path: string): boolean;
 }
 
-export function compilePattern(pattern: string): CompiledPattern {
+export const compilePattern = (pattern: string): CompiledPattern => {
   const negated = pattern.startsWith('!');
   const body = normalizePattern(negated ? pattern.slice(1) : pattern);
   const regex = new RegExp(`^${translate(body)}$`);
@@ -84,28 +82,28 @@ export function compilePattern(pattern: string): CompiledPattern {
       return prefixRegex ? prefixRegex.test(path) : false;
     },
   };
-}
+};
 
-function normalizePattern(pattern: string): string {
+const normalizePattern = (pattern: string): string => {
   let value = pattern.trim().replace(/\\/g, '/');
   if (value.startsWith('./')) value = value.slice(2);
   if (value.endsWith('/')) value = `${value}**`;
   return value;
-}
+};
 
 /**
  * Matches `path` against a pattern list. Later negated patterns (`!foo`) win
  * over earlier positive ones, matching `.gitignore` intuition.
  */
-export function matchesAny(path: string, patterns: readonly string[]): boolean {
+export const matchesAny = (path: string, patterns: readonly string[]): boolean => {
   return matchesCompiled(path, patterns.map(compilePattern));
-}
+};
 
-export function matchesCompiled(path: string, patterns: readonly CompiledPattern[]): boolean {
+export const matchesCompiled = (path: string, patterns: readonly CompiledPattern[]): boolean => {
   let matched = false;
   for (const pattern of patterns) {
     if (!pattern.test(path)) continue;
     matched = !pattern.negated;
   }
   return matched;
-}
+};

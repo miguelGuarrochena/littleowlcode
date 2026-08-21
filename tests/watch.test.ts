@@ -3,7 +3,7 @@ import { attributeFindings, createRunQueue } from '../src/cli/watch-runtime.js';
 import { DependencyGraph } from '../src/graph/dependency-graph.js';
 import type { Finding } from '../src/core/types.js';
 
-function finding(id: string, file?: string): Finding {
+const finding = (id: string, file?: string): Finding => {
   return {
     id,
     fingerprint: `${id}:${file ?? ''}`,
@@ -13,29 +13,27 @@ function finding(id: string, file?: string): Finding {
     title: `finding in ${file ?? 'the project'}`,
     message: 'message',
   };
-}
+};
 
-function graphOf(edges: Array<[string, string]>): DependencyGraph {
+const graphOf = (edges: Array<[string, string]>): DependencyGraph => {
   const graph = new DependencyGraph();
   for (const [from, to] of edges) graph.addEdge({ from, to, line: 1, typeOnly: false });
   return graph;
-}
+};
 
 /** Waits for a condition without pinning the test to an exact schedule. */
-async function until(condition: () => boolean, timeoutMs = 5_000): Promise<void> {
+const until = async (condition: () => boolean, timeoutMs = 5_000): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
   while (!condition()) {
     if (Date.now() > deadline) throw new Error('condition was never met');
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
-}
+};
 
 describe('watch finding attribution', () => {
   /**
-   * Watch mode used to print the file that was just saved as a heading and
-   * then list every finding that was new since the baseline underneath it, so
-   * an untouched file's problem was presented as if the last keystroke had
-   * caused it.
+   * A finding in a file the edit cannot reach is not the edit's fault, and
+   * presenting it under the file just saved is a claim nobody can check.
    */
   it('does not blame the changed file for a finding somewhere else', () => {
     const graph = graphOf([['src/utils/paths.ts', 'src/utils/format.ts']]);
@@ -112,9 +110,8 @@ describe('watch scheduling', () => {
   });
 
   /**
-   * The scheduler used to return early while an analysis was in flight, which
-   * threw away every edit made during it — the edits a developer is most
-   * likely to care about, since they were typing while the tool was busy.
+   * Edits made while an analysis is in flight are the ones most worth keeping:
+   * they were typed while the tool was busy.
    */
   it('does not lose a change that arrives while an analysis is running', async () => {
     const runs: string[][] = [];

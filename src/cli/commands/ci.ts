@@ -30,7 +30,7 @@ export interface CiVerdict {
  * build. A project with existing debt can adopt Little Owl without having to
  * fix everything first.
  */
-export async function ciCommand(options: CiOptions): Promise<number> {
+export const ciCommand = async (options: CiOptions): Promise<number> => {
   const root = resolveRoot(options);
   const config = await loadConfig(root);
 
@@ -92,12 +92,12 @@ export async function ciCommand(options: CiOptions): Promise<number> {
   print('');
   print(verdict.passed ? 'result: pass' : `result: fail (${verdict.reasons.join('; ')})`);
   return verdict.exitCode;
-}
+};
 
-function location(finding: Finding): string {
+const location = (finding: Finding): string => {
   if (!finding.file) return '';
   return `${finding.file}${finding.line ? `:${finding.line}` : ''}`;
-}
+};
 
 export interface CiThresholds {
   failOn: 'error' | 'warning' | 'never';
@@ -105,7 +105,7 @@ export interface CiThresholds {
   newOnly: boolean;
 }
 
-export function evaluateCi(review: ReviewResult, thresholds: CiThresholds): CiVerdict {
+export const evaluateCi = (review: ReviewResult, thresholds: CiThresholds): CiVerdict => {
   const considered = thresholds.newOnly ? review.newFindings : review.current.findings;
   const counts = countBySeverity(considered);
   const reasons: string[] = [];
@@ -126,4 +126,4 @@ export function evaluateCi(review: ReviewResult, thresholds: CiThresholds): CiVe
 
   const passed = reasons.length === 0;
   return { passed, reasons, exitCode: passed ? 0 : 1 };
-}
+};

@@ -64,18 +64,18 @@ const RATIONALE_PATTERNS = [
   /#\d+/,
 ];
 
-function looksLikeRationale(commit: Commit): boolean {
+const looksLikeRationale = (commit: Commit): boolean => {
   const text = `${commit.subject} ${commit.body}`;
   return RATIONALE_PATTERNS.some((pattern) => pattern.test(text));
-}
+};
 
-function daysSince(iso: string): number | null {
+const daysSince = (iso: string): number | null => {
   const then = Date.parse(iso);
   if (Number.isNaN(then)) return null;
   return Math.max(0, Math.round((Date.now() - then) / 86_400_000));
-}
+};
 
-export function explainFile(context: AnalysisContext, file: string): ArchaeologyReport {
+export const explainFile = (context: AnalysisContext, file: string): ArchaeologyReport => {
   const parsed = context.fileMap.get(file);
   const consumers = context.graph.dependentsOf(file);
   const tests = consumers.filter((path) => context.fileMap.get(path)?.isTest);
@@ -141,24 +141,24 @@ export function explainFile(context: AnalysisContext, file: string): Archaeology
   report.assessment = buildAssessment(context, report);
   report.recommendation = buildRecommendation(report);
   return report;
-}
+};
 
-function evidenceStrength(
+const evidenceStrength = (
   created: Commit | null,
   rationaleCount: number,
   commits: number,
-): EvidenceStrength {
+): EvidenceStrength => {
   if (created && rationaleCount > 0) return 'strong';
   if (created || commits > 0) return 'partial';
   return 'none';
-}
+};
 
-function structuralAssessment(
+const structuralAssessment = (
   context: AnalysisContext,
   file: string,
   consumers: string[],
   tests: string[],
-): string[] {
+): string[] => {
   const lines: string[] = [];
   const parsed = context.fileMap.get(file);
 
@@ -179,9 +179,9 @@ function structuralAssessment(
   }
 
   return lines;
-}
+};
 
-function buildAssessment(context: AnalysisContext, report: ArchaeologyReport): string[] {
+const buildAssessment = (context: AnalysisContext, report: ArchaeologyReport): string[] => {
   const lines: string[] = [];
 
   if (report.created) {
@@ -224,9 +224,9 @@ function buildAssessment(context: AnalysisContext, report: ArchaeologyReport): s
   }
 
   return lines;
-}
+};
 
-function buildRecommendation(report: ArchaeologyReport): string | null {
+const buildRecommendation = (report: ArchaeologyReport): string | null => {
   if (report.evidence === 'none') return null;
 
   if (report.consumers.length === 0 && report.tests.length === 0) {
@@ -248,4 +248,4 @@ function buildRecommendation(report: ArchaeologyReport): string | null {
   }
 
   return 'It is in use and covered by tests.';
-}
+};

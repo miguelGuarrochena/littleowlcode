@@ -73,7 +73,7 @@ export interface JsonReviewOutput extends JsonCheckOutput {
   resolvedFindings: JsonFinding[];
 }
 
-function toJsonFinding(finding: Finding): JsonFinding {
+const toJsonFinding = (finding: Finding): JsonFinding => {
   const json: JsonFinding = {
     id: finding.id,
     fingerprint: finding.fingerprint,
@@ -89,17 +89,17 @@ function toJsonFinding(finding: Finding): JsonFinding {
   if (finding.baseline !== undefined) json.baseline = finding.baseline;
   if (finding.current !== undefined) json.current = finding.current;
   return json;
-}
+};
 
-function counts(findings: Finding[]): { error: number; warning: number; info: number } {
+const counts = (findings: Finding[]): { error: number; warning: number; info: number } => {
   return {
     error: findings.filter((finding) => finding.severity === 'error').length,
     warning: findings.filter((finding) => finding.severity === 'warning').length,
     info: findings.filter((finding) => finding.severity === 'info').length,
   };
-}
+};
 
-export function checkToJson(result: AnalysisResult, version: string): JsonCheckOutput {
+export const checkToJson = (result: AnalysisResult, version: string): JsonCheckOutput => {
   return {
     schemaVersion: SCHEMA_VERSION,
     tool: { name: 'little-owl-code', version },
@@ -118,9 +118,9 @@ export function checkToJson(result: AnalysisResult, version: string): JsonCheckO
     truncated: result.truncated,
     durationMs: result.durationMs,
   };
-}
+};
 
-export function reviewToJson(review: ReviewResult, version: string): JsonReviewOutput {
+export const reviewToJson = (review: ReviewResult, version: string): JsonReviewOutput => {
   const base = checkToJson(review.current, version);
 
   return {
@@ -152,8 +152,8 @@ export function reviewToJson(review: ReviewResult, version: string): JsonReviewO
     newFindings: review.newFindings.map(toJsonFinding),
     resolvedFindings: review.resolvedFindings.map(toJsonFinding),
   };
-}
+};
 
-export function printJson(value: unknown): void {
+export const printJson = (value: unknown): void => {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
-}
+};

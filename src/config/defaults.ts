@@ -147,11 +147,11 @@ export const DEFAULT_CI: CiConfig = {
   newFindingsOnly: true,
 };
 
-export function ruleSeveritiesFor(strictness: Strictness): Record<string, Severity> {
+export const ruleSeveritiesFor = (strictness: Strictness): Record<string, Severity> => {
   return { ...DEFAULT_RULE_SEVERITIES, ...STRICTNESS_OVERRIDES[strictness] };
-}
+};
 
-export function baseConfig(strictness: Strictness = 'balanced'): ResolvedConfig {
+export const baseConfig = (strictness: Strictness = 'balanced'): ResolvedConfig => {
   return {
     strictness,
     include: [],
@@ -168,4 +168,4 @@ export function baseConfig(strictness: Strictness = 'balanced'): ResolvedConfig 
     scope: [],
     sourcePath: null,
   };
-}
+};

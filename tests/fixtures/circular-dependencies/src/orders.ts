@@ -1,5 +1,5 @@
 import { currentUser } from './users';
 
-export function orders() {
+export const orders = () => {
   return currentUser();
-}
+};

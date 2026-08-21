@@ -2,9 +2,9 @@ import type { Finding, Marker } from '../core/types.js';
 import { createFinding, type Rule } from '../core/context.js';
 import { dirOf } from '../utils/paths.js';
 
-function groupMarkers(kind: Marker['kind']) {
+const groupMarkers = (kind: Marker['kind']) => {
   return (markers: Marker[]): Marker[] => markers.filter((marker) => marker.kind === kind);
-}
+};
 
 const bareExcept: Rule = {
   id: 'python/bare-except',

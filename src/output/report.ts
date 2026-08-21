@@ -46,7 +46,7 @@ export interface RenderOptions {
   maxFindings?: number;
 }
 
-export function renderProjectSummary(project: ProjectInfo): string {
+export const renderProjectSummary = (project: ProjectInfo): string => {
   const lines = [
     `${colors.bold('Name')}            ${project.name}`,
     `${colors.bold('Stack')}           ${describeStack(project)}`,
@@ -62,7 +62,7 @@ export function renderProjectSummary(project: ProjectInfo): string {
     lines.push(`${colors.bold('Monorepo')}        ${project.monorepo.kind}`);
   }
   return lines.join('\n');
-}
+};
 
 /**
  * A banner for a partial analysis.
@@ -70,7 +70,7 @@ export function renderProjectSummary(project: ProjectInfo): string {
  * Every number in a truncated run describes part of the repository, so it has
  * to be said out loud rather than left for the reader to work out.
  */
-export function renderTruncationNotice(): string {
+export const renderTruncationNotice = (): string => {
   return [
     colors.yellow(
       `${icons.warn} Only the first ${MAX_SCANNED_FILES.toLocaleString()} source files were scanned.`,
@@ -78,16 +78,16 @@ export function renderTruncationNotice(): string {
     dim('   This report covers part of the repository, not all of it. Narrow the analysis'),
     dim('   with `include` or `ignore` in .little-owl/config.ts for numbers you can compare.'),
   ].join('\n');
-}
+};
 
 /**
  * Shown instead of a score when nothing was analysed.
  *
- * A project with no scanned files scores 100 on every metric, because there is
- * nothing to lose points for. Printing that would be the most misleading
- * output this tool can produce, so the empty case is stated plainly instead.
+ * With no scanned files every metric sits at 100, because there is nothing to
+ * lose points for. Stating the empty case plainly avoids handing back a
+ * perfect score for an empty measurement.
  */
-export function renderEmptyAnalysis(): string {
+export const renderEmptyAnalysis = (): string => {
   return [
     heading('CODEBASE HEALTH'),
     '',
@@ -99,9 +99,9 @@ export function renderEmptyAnalysis(): string {
     '',
     dim(`${icons.arrow} little-owl doctor  shows what Little Owl can and cannot see here.`),
   ].join('\n');
-}
+};
 
-export function renderHealth(result: AnalysisResult, options: RenderOptions = {}): string {
+export const renderHealth = (result: AnalysisResult, options: RenderOptions = {}): string => {
   if (result.project.fileCount === 0) return renderEmptyAnalysis();
 
   const counts = countBySeverity(result.findings);
@@ -124,10 +124,10 @@ export function renderHealth(result: AnalysisResult, options: RenderOptions = {}
   if (findings) sections.push('', findings);
 
   return sections.join('\n');
-}
+};
 
 /** Every score, with the baseline value alongside it when there is one. */
-export function renderMetricComparison(current: Metrics, baseline: Metrics | null): string[] {
+export const renderMetricComparison = (current: Metrics, baseline: Metrics | null): string[] => {
   const line = (label: string, key: keyof Metrics): string =>
     metricLine({
       label,
@@ -136,9 +136,9 @@ export function renderMetricComparison(current: Metrics, baseline: Metrics | nul
     });
 
   return [...METRIC_LABELS.map(([key, label]) => line(label, key)), line('Overall', 'overall')];
-}
+};
 
-export function renderReview(review: ReviewResult, options: RenderOptions = {}): string {
+export const renderReview = (review: ReviewResult, options: RenderOptions = {}): string => {
   const { current, baseline, changes, scope } = review;
   const shown = review.baseline ? review.newFindings : current.findings;
   const sections: string[] = [heading(`${icons.owl} CODEBASE REVIEW`), ''];
@@ -202,7 +202,7 @@ export function renderReview(review: ReviewResult, options: RenderOptions = {}):
     );
 
   return sections.join('\n');
-}
+};
 
 export interface ChangeSize {
   files: number;
@@ -218,7 +218,7 @@ export interface ChangeSize {
  * not wrong, but it is worth knowing before reading four findings and assuming
  * you have seen everything.
  */
-export function changeSize(changes: ChangeSet): ChangeSize {
+export const changeSize = (changes: ChangeSet): ChangeSize => {
   const insertions = changes.files.reduce((sum, file) => sum + file.insertions, 0);
   const deletions = changes.files.reduce((sum, file) => sum + file.deletions, 0);
   const areas = new Set(
@@ -236,9 +236,9 @@ export function changeSize(changes: ChangeSet): ChangeSize {
         : 'small';
 
   return { files: changes.files.length, insertions, deletions, areas, magnitude };
-}
+};
 
-function renderScope(patterns: string[], outOfScope: string[]): string {
+const renderScope = (patterns: string[], outOfScope: string[]): string => {
   const groups = groupByArea(outOfScope);
   const lines = [
     colors.yellow(`${icons.warn} SCOPE`),
@@ -250,9 +250,9 @@ function renderScope(patterns: string[], outOfScope: string[]): string {
     ),
   ];
   return lines.join('\n');
-}
+};
 
-export function renderFindings(findings: Finding[], options: RenderOptions = {}): string {
+export const renderFindings = (findings: Finding[], options: RenderOptions = {}): string => {
   if (findings.length === 0) return '';
   if (options.quiet) return '';
 
@@ -269,9 +269,9 @@ export function renderFindings(findings: Finding[], options: RenderOptions = {})
   }
 
   return [colors.bold('FINDINGS'), '', blocks.join(`\n${rule()}\n\n`)].join('\n');
-}
+};
 
-export function renderFinding(finding: Finding, verbose: boolean): string {
+export const renderFinding = (finding: Finding, verbose: boolean): string => {
   const paint = severityColor(finding.severity);
   const location = finding.file ? `${finding.file}${finding.line ? `:${finding.line}` : ''}` : '';
 
@@ -294,24 +294,26 @@ export function renderFinding(finding: Finding, verbose: boolean): string {
   }
 
   return lines.join('\n');
-}
+};
 
-export function countBySeverity(findings: Finding[]): {
+export const countBySeverity = (
+  findings: Finding[],
+): {
   error: number;
   warning: number;
   info: number;
-} {
+} => {
   return {
     error: findings.filter((finding) => finding.severity === 'error').length,
     warning: findings.filter((finding) => finding.severity === 'warning').length,
     info: findings.filter((finding) => finding.severity === 'info').length,
   };
-}
+};
 
-function renderCounts(
+const renderCounts = (
   counts: { error: number; warning: number; info: number },
   total: number,
-): string {
+): string => {
   const parts: string[] = [];
   if (counts.error > 0)
     parts.push(
@@ -327,9 +329,9 @@ function renderCounts(
   }
   const suffix = total > 0 ? dim(`   (${total} total findings in the project)`) : '';
   return parts.join('   ') + suffix;
-}
+};
 
-export function renderArchitecture(context: AnalysisContext): string {
+export const renderArchitecture = (context: AnalysisContext): string => {
   const { layers, graph } = context;
   const sections: string[] = [heading('ARCHITECTURE'), ''];
 
@@ -387,9 +389,9 @@ export function renderArchitecture(context: AnalysisContext): string {
     dim(`${graph.edges.length} internal imports across ${graph.nodes().length} files`),
   );
   return sections.join('\n');
-}
+};
 
-function architectureSummary(context: AnalysisContext): string[] {
+const architectureSummary = (context: AnalysisContext): string[] => {
   const pairs = new Map<string, number>();
   for (const edge of context.graph.edges) {
     if (edge.typeOnly) continue;
@@ -414,9 +416,9 @@ function architectureSummary(context: AnalysisContext): string[] {
       ([pair, count]) =>
         `${colors.red(icons.error)} ${pair}  ${dim(`(${countLabel(count, 'import')})`)}`,
     );
-}
+};
 
-export function renderImpact(report: ImpactReport): string {
+export const renderImpact = (report: ImpactReport): string => {
   const sections: string[] = [heading('CHANGE IMPACT'), ''];
 
   if (report.changed.length === 0) {
@@ -469,9 +471,9 @@ export function renderImpact(report: ImpactReport): string {
   );
 
   return sections.join('\n');
-}
+};
 
-export function renderDependencies(context: AnalysisContext): string {
+export const renderDependencies = (context: AnalysisContext): string => {
   const imported = context.graph.externalPackages();
   const packages = [...imported].sort();
   const declared = {
@@ -529,11 +531,11 @@ export function renderDependencies(context: AnalysisContext): string {
   );
 
   return lines.join('\n');
-}
+};
 
-export function renderOwlLine(message: string, tone: 'good' | 'warn' | 'bad' = 'good'): string {
+export const renderOwlLine = (message: string, tone: 'good' | 'warn' | 'bad' = 'good'): string => {
   const paint = tone === 'good' ? colors.green : tone === 'warn' ? colors.yellow : colors.red;
   return `${icons.owl} ${paint(message)}`;
-}
+};
 
 export { box, indent };

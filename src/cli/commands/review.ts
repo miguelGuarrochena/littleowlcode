@@ -32,7 +32,7 @@ export interface ReviewOptions extends GlobalOptions {
 }
 
 /** `little-owl review` — what did the latest changes do to the codebase? */
-export async function reviewCommand(options: ReviewOptions): Promise<number> {
+export const reviewCommand = async (options: ReviewOptions): Promise<number> => {
   const root = resolveRoot(options);
 
   if (!isGitRepository(root)) {
@@ -74,9 +74,9 @@ export async function reviewCommand(options: ReviewOptions): Promise<number> {
   }
 
   return exitCodeFor(review);
-}
+};
 
-function recordHistory(root: string, review: ReviewResult): void {
+const recordHistory = (root: string, review: ReviewResult): void => {
   const shown = review.baseline ? review.newFindings : review.current.findings;
   try {
     appendHistory(root, {
@@ -92,13 +92,13 @@ function recordHistory(root: string, review: ReviewResult): void {
   } catch {
     // History is a convenience. Never let it break a review.
   }
-}
+};
 
-async function followUpMenu(
+const followUpMenu = async (
   root: string,
   review: ReviewResult,
   options: ReviewOptions,
-): Promise<void> {
+): Promise<void> => {
   const shown = review.baseline ? review.newFindings : review.current.findings;
 
   for (;;) {
@@ -147,11 +147,11 @@ async function followUpMenu(
       return;
     }
   }
-}
+};
 
-function exitCodeFor(review: ReviewResult): number {
+const exitCodeFor = (review: ReviewResult): number => {
   // `review` is a reporting command: it describes, it does not gate. Use
   // `little-owl ci` when an exit code should decide whether a build proceeds.
   void review;
   return 0;
-}
+};

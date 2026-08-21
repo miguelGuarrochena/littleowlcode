@@ -23,7 +23,7 @@ export interface CheckOptions extends GlobalOptions {
 }
 
 /** `little-owl check` — the health of the codebase as it stands right now. */
-export async function checkCommand(options: CheckOptions): Promise<number> {
+export const checkCommand = async (options: CheckOptions): Promise<number> => {
   const root = resolveRoot(options);
   const config = await loadConfig(root);
   const progress = createProgress(!options.json && !options.quiet && isInteractive());
@@ -67,7 +67,7 @@ export async function checkCommand(options: CheckOptions): Promise<number> {
 
   if (!options.quiet) printNextSteps(root, config.sourcePath !== null);
   return 0;
-}
+};
 
 /**
  * What to do with what you just read.
@@ -76,7 +76,7 @@ export async function checkCommand(options: CheckOptions): Promise<number> {
  * The suggestions are ordered by what is actually missing: a project with no
  * baseline cannot review anything yet, so that comes first.
  */
-function printNextSteps(root: string, configured: boolean): void {
+const printNextSteps = (root: string, configured: boolean): void => {
   const hasBaseline = fs.existsSync(path.join(root, '.little-owl', 'baseline.json'));
   const steps: string[] = [];
 
@@ -103,4 +103,4 @@ function printNextSteps(root: string, configured: boolean): void {
   print(dim('Next'));
   print('');
   for (const step of steps.slice(0, 3)) print(dim(`  ${step}`));
-}
+};

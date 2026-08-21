@@ -18,16 +18,15 @@ export interface RunQueue {
 /**
  * Debounces file changes into batched runs, without losing anything.
  *
- * The previous version returned early while an analysis was in flight, which
- * silently dropped every edit made during it — exactly the edits a developer is
- * most likely to care about, since they were typing while the tool was busy.
- * Changes that arrive mid-run are now kept and trigger another run afterwards.
+ * Edits that arrive while an analysis is in flight are kept and trigger another
+ * run once it finishes — those are the edits most worth catching, since they
+ * were typed while the tool was busy.
  */
-export function createRunQueue(
+export const createRunQueue = (
   debounceMs: number,
   run: (files: string[]) => Promise<void>,
   onError: (error: unknown) => void = () => {},
-): RunQueue {
+): RunQueue => {
   const waiting = new Set<string>();
   let timer: NodeJS.Timeout | null = null;
   let running = false;
@@ -75,7 +74,7 @@ export function createRunQueue(
       timer = null;
     },
   };
-}
+};
 
 export interface AttributedFindings {
   /** Findings in the files that were just edited. */
@@ -91,18 +90,16 @@ export interface AttributedFindings {
 /**
  * Works out which of the new findings the current edit can actually account for.
  *
- * Watch mode used to print the touched file as a heading and then list every
- * finding that was new since the baseline underneath it, which meant an
- * untouched file's problem was presented as if the last keystroke had caused
- * it. Reachability is the only honest link available here: a finding is tied to
- * the change if it is *in* a changed file, or in a file that imports one.
- * Anything else is reported separately and labelled as such.
+ * Reachability is the only honest link available: a finding belongs to the edit
+ * if it sits *in* a changed file, or in a file that imports one. Anything else
+ * is reported separately and labelled as such, because presenting an untouched
+ * file's problem under the file just saved is a claim nobody can check.
  */
-export function attributeFindings(
+export const attributeFindings = (
   touched: readonly string[],
   findings: readonly Finding[],
   graph: DependencyGraph,
-): AttributedFindings {
+): AttributedFindings => {
   const changed = new Set(touched);
   const affected = new Set<string>();
 
@@ -123,4 +120,4 @@ export function attributeFindings(
   }
 
   return { inChange, inAffected, elsewhere, affectedFiles: [...affected].sort() };
-}
+};

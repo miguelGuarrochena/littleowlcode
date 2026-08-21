@@ -23,16 +23,14 @@ export interface LanguageAdapter {
 const TEST_PATTERN =
   /(^|\/)(tests?|__tests__|spec|e2e)\/|\.(test|spec)\.[cm]?[jt]sx?$|(^|\/)test_[^/]+\.py$|_test\.(py|go)$/;
 
-export function looksLikeTest(file: string): boolean {
-  return TEST_PATTERN.test(file);
-}
+export const looksLikeTest = (file: string): boolean => TEST_PATTERN.test(file);
 
 /**
  * Counts lines that carry actual code. Comment detection is line-based and
  * therefore approximate — good enough for size metrics, and it never needs a
  * second parse of the file.
  */
-export function countSloc(lines: string[], commentPrefixes: string[]): number {
+export const countSloc = (lines: string[], commentPrefixes: string[]): number => {
   let count = 0;
   let inBlock = false;
 
@@ -55,9 +53,13 @@ export function countSloc(lines: string[], commentPrefixes: string[]): number {
   }
 
   return count;
-}
+};
 
-export function emptyParsedFile(input: ParseInput, language: Language, hash: string): ParsedFile {
+export const emptyParsedFile = (
+  input: ParseInput,
+  language: Language,
+  hash: string,
+): ParsedFile => {
   const lines = input.content.split('\n');
   return {
     path: input.path,
@@ -73,4 +75,4 @@ export function emptyParsedFile(input: ParseInput, language: Language, hash: str
     isTest: looksLikeTest(input.path),
     meta: {},
   };
-}
+};

@@ -1,5 +1,5 @@
 import { query } from '../lib/db/client';
 
-export function listOrders() {
+export const listOrders = () => {
   return query('select * from orders');
-}
+};

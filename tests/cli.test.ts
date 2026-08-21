@@ -33,14 +33,14 @@ interface RunResult {
   stderr: string;
 }
 
-function run(args: string[], cwd: string): RunResult {
+const run = (args: string[], cwd: string): RunResult => {
   const result = spawnSync(process.execPath, [cli, ...args], {
     cwd,
     encoding: 'utf8',
     env: { ...process.env, NO_COLOR: '1', CI: 'true' },
   });
   return { status: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
-}
+};
 
 const CLEAN_PROJECT = {
   'package.json': '{"name":"cli-fixture"}',
@@ -302,8 +302,8 @@ describe('cli', () => {
   });
 
   it('keeps its own cache out of git even without init', () => {
-    // The cache used to land in a directory with no ignore file unless `init`
-    // had been run, which is how a cache fixture reached this repository.
+    // The cache is machine state, and `init` is optional — so the ignore file
+    // cannot depend on having run it.
     project = TempProject.create(CLEAN_PROJECT);
 
     const result = run(['check'], project.root);

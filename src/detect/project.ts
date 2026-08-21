@@ -15,7 +15,7 @@ interface PackageJson {
   scripts?: Record<string, string>;
 }
 
-export function readPackageJson(root: string): PackageJson | null {
+export const readPackageJson = (root: string): PackageJson | null => {
   const file = path.join(root, 'package.json');
   if (!fs.existsSync(file)) return null;
   try {
@@ -23,12 +23,12 @@ export function readPackageJson(root: string): PackageJson | null {
   } catch {
     return null;
   }
-}
+};
 
-function detectPackageManager(
+const detectPackageManager = (
   root: string,
   pkg: PackageJson | null,
-): ProjectInfo['packageManager'] {
+): ProjectInfo['packageManager'] => {
   if (pkg?.packageManager?.startsWith('pnpm')) return 'pnpm';
   if (pkg?.packageManager?.startsWith('yarn')) return 'yarn';
   if (pkg?.packageManager?.startsWith('bun')) return 'bun';
@@ -39,7 +39,7 @@ function detectPackageManager(
   if (fs.existsSync(path.join(root, 'yarn.lock'))) return 'yarn';
   if (fs.existsSync(path.join(root, 'package-lock.json'))) return 'npm';
   return pkg ? 'npm' : null;
-}
+};
 
 /** Frameworks are inferred from dependencies plus a few unmistakable files. */
 const FRAMEWORK_BY_DEPENDENCY: Array<[string, string]> = [
@@ -66,7 +66,7 @@ const PYTHON_FRAMEWORKS: Array<[RegExp, string]> = [
   [/(^|\n)\s*flask/i, 'Flask'],
 ];
 
-function detectPythonFrameworks(root: string): string[] {
+const detectPythonFrameworks = (root: string): string[] => {
   const found: string[] = [];
   const files = ['requirements.txt', 'pyproject.toml', 'Pipfile'];
   for (const name of files) {
@@ -80,9 +80,9 @@ function detectPythonFrameworks(root: string): string[] {
   if (fs.existsSync(path.join(root, 'manage.py')) && !found.includes('Django'))
     found.push('Django');
   return found;
-}
+};
 
-function detectMonorepo(root: string, pkg: PackageJson | null): ProjectInfo['monorepo'] {
+const detectMonorepo = (root: string, pkg: PackageJson | null): ProjectInfo['monorepo'] => {
   const workspaceFile = path.join(root, 'pnpm-workspace.yaml');
   if (fs.existsSync(workspaceFile)) {
     const content = fs.readFileSync(workspaceFile, 'utf8');
@@ -100,15 +100,15 @@ function detectMonorepo(root: string, pkg: PackageJson | null): ProjectInfo['mon
     return { kind, packages: workspaces };
   }
   return null;
-}
+};
 
-function normalizeWorkspaces(workspaces: PackageJson['workspaces']): string[] {
+const normalizeWorkspaces = (workspaces: PackageJson['workspaces']): string[] => {
   if (!workspaces) return [];
   if (Array.isArray(workspaces)) return workspaces;
   return workspaces.packages ?? [];
-}
+};
 
-export function detectLanguages(root: string, fileList: string[]): Language[] {
+export const detectLanguages = (root: string, fileList: string[]): Language[] => {
   const languages = new Set<Language>();
   for (const file of fileList) {
     if (/\.(ts|tsx|mts|cts)$/.test(file)) languages.add('typescript');
@@ -118,9 +118,9 @@ export function detectLanguages(root: string, fileList: string[]): Language[] {
   }
   if (fs.existsSync(path.join(root, 'go.mod'))) languages.add('go');
   return [...languages].sort();
-}
+};
 
-export function isGitRepo(root: string): boolean {
+export const isGitRepo = (root: string): boolean => {
   let current = root;
   for (let depth = 0; depth < 40; depth += 1) {
     if (fs.existsSync(path.join(current, '.git'))) return true;
@@ -129,13 +129,13 @@ export function isGitRepo(root: string): boolean {
     current = parent;
   }
   return false;
-}
+};
 
 export interface DetectOptions {
   files: string[];
 }
 
-export function detectProject(root: string, options: DetectOptions): ProjectInfo {
+export const detectProject = (root: string, options: DetectOptions): ProjectInfo => {
   const pkg = readPackageJson(root);
   const dependencies = pkg?.dependencies ?? {};
   const devDependencies = pkg?.devDependencies ?? {};
@@ -169,10 +169,10 @@ export function detectProject(root: string, options: DetectOptions): ProjectInfo
       ? { main: pkg.main, module: pkg.module, bin: pkg.bin, exports: pkg.exports }
       : null,
   };
-}
+};
 
 /** Short one-line stack description, e.g. `Next.js · TypeScript`. */
-export function describeStack(project: ProjectInfo): string {
+export const describeStack = (project: ProjectInfo): string => {
   const parts: string[] = [];
   const primaryFramework = project.frameworks[0];
   if (primaryFramework) parts.push(primaryFramework);
@@ -181,4 +181,4 @@ export function describeStack(project: ProjectInfo): string {
   if (project.languages.includes('python')) parts.push('Python');
   if (project.languages.includes('go')) parts.push('Go');
   return parts.length > 0 ? [...new Set(parts)].join(' · ') : 'Unknown';
-}
+};

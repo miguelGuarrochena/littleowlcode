@@ -41,7 +41,7 @@ export interface Analysis {
   cache: ParseCache;
 }
 
-export async function analyzeProject(options: AnalyzeOptions): Promise<Analysis> {
+export const analyzeProject = async (options: AnalyzeOptions): Promise<Analysis> => {
   const started = Date.now();
   const root = path.resolve(options.root);
   const notify = options.onProgress ?? (() => {});
@@ -113,7 +113,7 @@ export async function analyzeProject(options: AnalyzeOptions): Promise<Analysis>
       durationMs: Date.now() - started,
     },
   };
-}
+};
 
 /**
  * Parses every file, skipping the ones that cannot be read or understood.
@@ -121,11 +121,11 @@ export async function analyzeProject(options: AnalyzeOptions): Promise<Analysis>
  * A single unreadable or malformed file must never take down the analysis of
  * the other few thousand, so failures become warnings the report can mention.
  */
-function parseAll(
+const parseAll = (
   root: string,
   relativePaths: string[],
   cache: ParseCache,
-): { files: ParsedFile[]; warnings: AnalysisWarning[] } {
+): { files: ParsedFile[]; warnings: AnalysisWarning[] } => {
   const files: ParsedFile[] = [];
   const warnings: AnalysisWarning[] = [];
 
@@ -175,9 +175,9 @@ function parseAll(
   }
 
   return { files, warnings };
-}
+};
 
-function ruleCrashFinding(ruleId: string, error: unknown): Finding {
+const ruleCrashFinding = (ruleId: string, error: unknown): Finding => {
   const message = error instanceof Error ? error.message : String(error);
   return {
     id: 'internal/rule-error',
@@ -188,4 +188,4 @@ function ruleCrashFinding(ruleId: string, error: unknown): Finding {
     message: `Little Owl could not finish this rule: ${message}. The rest of the analysis is unaffected.`,
     suggestion: 'Please report this at https://github.com/littleowlcode/little-owl-code/issues',
   };
-}
+};

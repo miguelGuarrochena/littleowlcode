@@ -32,11 +32,9 @@ interface HistoryFile {
 const HISTORY_VERSION = '1';
 const MAX_ENTRIES = 50;
 
-export function historyPath(root: string): string {
-  return path.join(root, '.little-owl', 'history.json');
-}
+export const historyPath = (root: string): string => path.join(root, '.little-owl', 'history.json');
 
-export function readHistory(root: string): HistoryEntry[] {
+export const readHistory = (root: string): HistoryEntry[] => {
   const file = historyPath(root);
   if (!fs.existsSync(file)) return [];
   try {
@@ -46,9 +44,9 @@ export function readHistory(root: string): HistoryEntry[] {
   } catch {
     return [];
   }
-}
+};
 
-export function appendHistory(root: string, entry: Omit<HistoryEntry, 'id'>): HistoryEntry {
+export const appendHistory = (root: string, entry: Omit<HistoryEntry, 'id'>): HistoryEntry => {
   const entries = readHistory(root);
   const id = (entries[entries.length - 1]?.id ?? 0) + 1;
   const full: HistoryEntry = { ...entry, id };
@@ -60,8 +58,8 @@ export function appendHistory(root: string, entry: Omit<HistoryEntry, 'id'>): Hi
     `${JSON.stringify({ version: HISTORY_VERSION, entries: next }, null, 2)}\n`,
   );
   return full;
-}
+};
 
-export function latestEntries(root: string, count: number): HistoryEntry[] {
+export const latestEntries = (root: string, count: number): HistoryEntry[] => {
   return readHistory(root).slice(-count);
-}
+};

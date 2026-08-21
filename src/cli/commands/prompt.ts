@@ -16,7 +16,7 @@ export interface PromptOptions extends GlobalOptions {
  * Little Owl never calls a model and needs no API key; it just writes the text
  * and stays out of the way.
  */
-export async function promptCommand(options: PromptOptions): Promise<number> {
+export const promptCommand = async (options: PromptOptions): Promise<number> => {
   const root = resolveRoot(options);
 
   const review = await runReview({
@@ -33,4 +33,4 @@ export async function promptCommand(options: PromptOptions): Promise<number> {
     }),
   );
   return 0;
-}
+};

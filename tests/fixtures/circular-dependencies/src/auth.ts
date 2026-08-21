@@ -1,5 +1,5 @@
 import { orders } from './orders';
 
-export function auth() {
+export const auth = () => {
   return orders();
-}
+};

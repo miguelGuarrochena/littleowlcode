@@ -52,7 +52,7 @@ interface WatchSession {
 }
 
 /** Watches the tree, filtering out anything that cannot change the analysis. */
-function createWatcher(root: string, onChange: (relative: string) => void) {
+const createWatcher = (root: string, onChange: (relative: string) => void) => {
   const ignored = WATCH_IGNORED.map(compilePattern);
 
   const watcher = chokidar.watch(root, {
@@ -73,10 +73,10 @@ function createWatcher(root: string, onChange: (relative: string) => void) {
 
   watcher.on('add', handle).on('change', handle).on('unlink', handle);
   return watcher;
-}
+};
 
 /** Resolves once the process is asked to stop, after cleaning up. */
-function untilStopped(cleanup: () => void): Promise<void> {
+const untilStopped = (cleanup: () => void): Promise<void> => {
   return new Promise<void>((resolve) => {
     const stop = (): void => {
       cleanup();
@@ -87,9 +87,9 @@ function untilStopped(cleanup: () => void): Promise<void> {
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
   });
-}
+};
 
-export async function watchCommand(options: WatchOptions): Promise<number> {
+export const watchCommand = async (options: WatchOptions): Promise<number> => {
   const root = resolveRoot(options);
   const config = await loadConfig(root);
   const cache = ParseCache.open(root);
@@ -138,20 +138,20 @@ export async function watchCommand(options: WatchOptions): Promise<number> {
   });
 
   return 0;
-}
+};
 
 /**
  * Files that can change the analysis: source files, the manifest, and the
  * project's own configuration. A README or a log file cannot, and re-running
  * for those would just burn CPU and scroll the terminal.
  */
-function affectsAnalysis(relative: string): boolean {
+const affectsAnalysis = (relative: string): boolean => {
   if (SOURCE_EXTENSIONS.some((extension) => relative.endsWith(extension))) return true;
   const name = basename(relative);
   return name === 'package.json' || name === 'tsconfig.json' || name === 'go.mod';
-}
+};
 
-function printHealthy(result: AnalysisResult, reference: Metrics, hasBaseline: boolean): void {
+const printHealthy = (result: AnalysisResult, reference: Metrics, hasBaseline: boolean): void => {
   const lines: Array<[string, keyof Metrics]> = [
     ['Architecture', 'architecture'],
     ['Complexity', 'complexity'],
@@ -171,10 +171,10 @@ function printHealthy(result: AnalysisResult, reference: Metrics, hasBaseline: b
         : 'No saved baseline — comparing against the state at start-up.',
     ),
   );
-}
+};
 
 /** The files that were saved, and how far their imports reach. */
-function printChangeHeader(touched: string[], attributed: AttributedFindings): void {
+const printChangeHeader = (touched: string[], attributed: AttributedFindings): void => {
   print(colors.bold('Changed'));
   for (const file of touched.slice(0, 5)) print(`  ${file}`);
   if (touched.length > 5) print(dim(`  ... and ${touched.length - 5} more`));
@@ -184,9 +184,9 @@ function printChangeHeader(touched: string[], attributed: AttributedFindings): v
     print(dim(`  ${countLabel(affected, 'file')} import this, directly or indirectly`));
   }
   print('');
-}
+};
 
-function printDrift(drifted: Array<keyof Metrics>, current: Metrics, reference: Metrics): void {
+const printDrift = (drifted: Array<keyof Metrics>, current: Metrics, reference: Metrics): void => {
   for (const key of drifted) {
     print(
       metricLine({
@@ -196,7 +196,7 @@ function printDrift(drifted: Array<keyof Metrics>, current: Metrics, reference: 
       }),
     );
   }
-}
+};
 
 /**
  * Findings under a heading that says how they relate to the edit.
@@ -204,7 +204,7 @@ function printDrift(drifted: Array<keyof Metrics>, current: Metrics, reference: 
  * Listing an unrelated file's problem beneath the file that was just saved
  * would be a claim the developer has no way to check.
  */
-function printGroup(label: string, findings: Finding[]): void {
+const printGroup = (label: string, findings: Finding[]): void => {
   if (findings.length === 0) return;
 
   print('');
@@ -220,15 +220,15 @@ function printGroup(label: string, findings: Finding[]): void {
   if (findings.length > 3) {
     print(dim(`${findings.length - 3} more — run \`little-owl check --details\`.`));
   }
-}
+};
 
-function report(
+const report = (
   touched: string[],
   result: AnalysisResult,
   graph: DependencyGraph,
   session: WatchSession,
   options: WatchOptions,
-): void {
+): void => {
   const { reference, previous, known } = session;
   const fresh = result.findings.filter((finding) => !known.has(finding.fingerprint));
   const drifted = (Object.keys(reference) as Array<keyof Metrics>).filter(
@@ -268,9 +268,9 @@ function report(
     print(promptFor(fromChange));
   }
   print('');
-}
+};
 
-function promptFor(findings: Finding[]): string {
+const promptFor = (findings: Finding[]): string => {
   return generatePrompt(
     {
       status: 'needs-review',
@@ -300,4 +300,4 @@ function promptFor(findings: Finding[]): string {
     },
     { maxInstructions: 4 },
   );
-}
+};

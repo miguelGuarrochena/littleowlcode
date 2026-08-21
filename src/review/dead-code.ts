@@ -112,7 +112,7 @@ interface NameUsage {
   wildcarded: Set<string>;
 }
 
-function collectNameUsage(context: AnalysisContext): NameUsage {
+const collectNameUsage = (context: AnalysisContext): NameUsage => {
   const byFile = new Map<string, Set<string>>();
   const wildcarded = new Set<string>();
 
@@ -133,16 +133,16 @@ function collectNameUsage(context: AnalysisContext): NameUsage {
   }
 
   return { byFile, wildcarded };
-}
+};
 
 /** Whether a file's exported names can be judged at all. */
-function canJudgeExports(
+const canJudgeExports = (
   file: ParsedFile,
   context: AnalysisContext,
   usage: NameUsage,
   conventions: CompiledPattern[],
   packageEntries: Set<string>,
-): boolean {
+): boolean => {
   if (file.isTest) return false;
   // Python and Go export detection is too shallow to say "nobody uses this".
   if (file.language !== 'typescript' && file.language !== 'javascript') return false;
@@ -154,13 +154,13 @@ function canJudgeExports(
   if (matchesCompiled(file.path, conventions)) return false;
   if (packageEntries.has(file.path)) return false;
   return !isInEntryDirectory(file.path);
-}
+};
 
-function findUnusedExports(
+const findUnusedExports = (
   context: AnalysisContext,
   conventions: CompiledPattern[],
   packageEntries: Set<string>,
-): UnusedExport[] {
+): UnusedExport[] => {
   const usage = collectNameUsage(context);
   // A name can also be reached from a test, which is not counted as usage.
   const caveats = context.files.some((file) => file.isTest)
@@ -185,12 +185,12 @@ function findUnusedExports(
   }
 
   return unused.sort((a, b) => (a.file < b.file ? -1 : 1));
-}
+};
 
-export function findDeadCode(
+export const findDeadCode = (
   context: AnalysisContext,
   options: DeadCodeOptions = {},
-): DeadCodeReport {
+): DeadCodeReport => {
   const conventions = CONVENTION_ENTRY_POINTS.map(compilePattern);
   const entryPoints: string[] = [];
   const candidates: DeadCodeCandidate[] = [];
@@ -265,15 +265,15 @@ export function findDeadCode(
     entryPoints: entryPoints.sort(),
     hasUnresolvedDynamicImports,
   };
-}
+};
 
-function isInEntryDirectory(file: string): boolean {
+const isInEntryDirectory = (file: string): boolean => {
   const parts = dirOf(file).split('/');
   return parts.some((part) => ENTRY_DIRECTORIES.includes(part));
-}
+};
 
 /** Files named as entry points by package.json (`main`, `bin`, `exports`). */
-function packageEntryPoints(context: AnalysisContext): Set<string> {
+const packageEntryPoints = (context: AnalysisContext): Set<string> => {
   const entries = new Set<string>();
   const candidates = new Set<string>();
 
@@ -305,4 +305,4 @@ function packageEntryPoints(context: AnalysisContext): Set<string> {
   }
 
   return entries;
-}
+};

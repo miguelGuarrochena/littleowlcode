@@ -10,13 +10,13 @@ export interface GlobalOptions {
   color?: boolean;
 }
 
-export function resolveRoot(options: GlobalOptions = {}): string {
+export const resolveRoot = (options: GlobalOptions = {}): string => {
   return path.resolve(options.cwd ?? process.cwd());
-}
+};
 
-export function isInteractive(): boolean {
+export const isInteractive = (): boolean => {
   return process.stdout.isTTY === true && process.env['CI'] !== 'true';
-}
+};
 
 /**
  * Progress indicator that stays silent when output is being piped or parsed.
@@ -28,7 +28,7 @@ export interface Progress {
   stop(message?: string): void;
 }
 
-export function createProgress(enabled: boolean): Progress {
+export const createProgress = (enabled: boolean): Progress => {
   if (!enabled) {
     return { start: () => {}, update: () => {}, stop: () => {} };
   }
@@ -50,7 +50,7 @@ export function createProgress(enabled: boolean): Progress {
       running = false;
     },
   };
-}
+};
 
 export const PROGRESS_LABELS: Record<string, string> = {
   'reading-project': 'Reading project',
@@ -61,21 +61,27 @@ export const PROGRESS_LABELS: Record<string, string> = {
   done: 'Analysis complete',
 };
 
-export function print(text: string): void {
+export const print = (text: string): void => {
   process.stdout.write(`${text}\n`);
-}
+};
 
-export function printError(text: string): void {
+export const printError = (text: string): void => {
   process.stderr.write(`${colors.red('✗')} ${text}\n`);
-}
+};
 
-/** Exits with a message; used for unrecoverable command-level problems. */
-export function fail(message: string, code = 1): never {
+/**
+ * Exits with a message; used for unrecoverable command-level problems.
+ *
+ * The type annotation on the constant is load-bearing: control-flow analysis
+ * only treats a call as unreachable-after when the identifier's type is
+ * declared, so without it callers stop narrowing past `fail(...)`.
+ */
+export const fail: (message: string, code?: number) => never = (message, code = 1) => {
   printError(message);
   process.exit(code);
-}
+};
 
-export function cancelled(): never {
+export const cancelled: () => never = () => {
   prompts.cancel('Cancelled.');
   process.exit(0);
-}
+};

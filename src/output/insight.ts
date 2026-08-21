@@ -21,7 +21,7 @@ const CONFIDENCE_PAINT: Record<Confidence, (text: string) => string> = {
 };
 
 /** Exported names nothing imports, grouped by the file that declares them. */
-function renderUnusedExports(report: DeadCodeReport): string[] {
+const renderUnusedExports = (report: DeadCodeReport): string[] => {
   if (report.unusedExports.length === 0) return [];
 
   const total = report.unusedExports.reduce((sum, entry) => sum + entry.names.length, 0);
@@ -54,9 +54,9 @@ function renderUnusedExports(report: DeadCodeReport): string[] {
   );
 
   return lines;
-}
+};
 
-export function renderDeadCode(report: DeadCodeReport): string {
+export const renderDeadCode = (report: DeadCodeReport): string => {
   const lines: string[] = [heading('DEAD CODE'), ''];
 
   if (report.candidates.length === 0) {
@@ -114,9 +114,9 @@ export function renderDeadCode(report: DeadCodeReport): string {
   }
 
   return lines.join('\n');
-}
+};
 
-export function renderTestGaps(report: TestGapReport): string {
+export const renderTestGaps = (report: TestGapReport): string => {
   const lines: string[] = [heading('TEST GAPS'), ''];
 
   if (report.hasNoTests) {
@@ -186,9 +186,9 @@ export function renderTestGaps(report: TestGapReport): string {
   );
 
   return lines.join('\n');
-}
+};
 
-export function renderArchaeology(report: ArchaeologyReport): string {
+export const renderArchaeology = (report: ArchaeologyReport): string => {
   const lines: string[] = [heading('CODE ARCHAEOLOGY'), '', colors.bold(report.file), ''];
 
   if (!report.exists) {
@@ -254,9 +254,9 @@ export function renderArchaeology(report: ArchaeologyReport): string {
   }
 
   return lines.join('\n');
-}
+};
 
-export function renderProjectMap(map: ProjectMap): string {
+export const renderProjectMap = (map: ProjectMap): string => {
   const lines: string[] = [heading('PROJECT MAP'), ''];
 
   lines.push(
@@ -323,4 +323,4 @@ export function renderProjectMap(map: ProjectMap): string {
 
   lines.push(dim('Areas are inferred from the directory structure, not from configuration.'));
   return lines.join('\n');
-}
+};

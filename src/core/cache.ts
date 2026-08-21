@@ -12,12 +12,11 @@ import { ensureLocalGitignore } from '../config/load.js';
  */
 
 /**
- * Bump this whenever the shape of `ParsedFile` changes.
+ * Bump whenever the shape of `ParsedFile` changes.
  *
- * The tool version alone is not enough: during development the version stays
- * put while the shape moves, and a stale entry then looks valid. That is how
- * unused-export detection first shipped reporting live code as unused — the
- * cached imports predated the field it reads.
+ * The tool version alone is not enough to invalidate on: it stays put while the
+ * shape moves, so an entry missing a newly added field still looks valid and
+ * the rules reading that field see nothing.
  */
 const CACHE_VERSION = 2;
 

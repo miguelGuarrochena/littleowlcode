@@ -2,9 +2,7 @@
  * One place that decides whether a declared package counts as used.
  *
  * The `dependencies/unused-dependency` rule and the `little-owl dependencies`
- * report used to answer this question separately, which meant the same project
- * could be told its dependencies "line up" by one and that eslint was unused by
- * the other. Both now call in here.
+ * report both call in here, so they cannot disagree about the same package.
  */
 
 /**
@@ -70,33 +68,33 @@ const NODE_BUILTINS = new Set([
   'module',
 ]);
 
-export function isNodeBuiltin(name: string): boolean {
+export const isNodeBuiltin = (name: string): boolean => {
   return name.startsWith('node:') || NODE_BUILTINS.has(name);
-}
+};
 
 /** True when a package does its job without ever being imported. */
-export function isImplicitlyUsed(name: string): boolean {
+export const isImplicitlyUsed = (name: string): boolean => {
   return IMPLICITLY_USED.some((pattern) => pattern.test(name));
-}
+};
 
 /**
  * Declared packages that nothing imports and that are not the kind of package
  * which works without being imported.
  */
-export function unusedDependencies(
+export const unusedDependencies = (
   declared: Record<string, string>,
   imported: ReadonlySet<string>,
-): string[] {
+): string[] => {
   return Object.keys(declared)
     .filter((name) => !imported.has(name))
     .filter((name) => !isImplicitlyUsed(name))
     .sort();
-}
+};
 
 /** Imported packages that no manifest declares, ignoring Node's own modules. */
-export function undeclaredPackages(
+export const undeclaredPackages = (
   imported: Iterable<string>,
   declared: Record<string, string>,
-): string[] {
+): string[] => {
   return [...imported].filter((name) => !isNodeBuiltin(name) && !(name in declared)).sort();
-}
+};

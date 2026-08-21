@@ -1,4 +1,4 @@
-export function query<T>(sql: string): T[] {
+export const query = <T>(sql: string): T[] => {
   if (!sql) return [];
   return [];
-}
+};

@@ -33,7 +33,7 @@ const STRUCTURE_HINTS: Record<string, string> = {
   flat: 'Everything in a small number of top-level folders',
 };
 
-export async function initCommand(options: InitOptions): Promise<number> {
+export const initCommand = async (options: InitOptions): Promise<number> => {
   const root = resolveRoot(options);
   const existing = findConfigFile(root);
 
@@ -130,22 +130,22 @@ export async function initCommand(options: InitOptions): Promise<number> {
 
   if (interactive) prompts.outro(`${icons.owl}  Ready.`);
   return 0;
-}
+};
 
-async function askBaseline(): Promise<boolean> {
+const askBaseline = async (): Promise<boolean> => {
   const answer = await prompts.confirm({
     message: 'Save the current state as the baseline?',
     initialValue: true,
   });
   if (prompts.isCancel(answer)) cancelled();
   return answer;
-}
+};
 
-function layersFor(
+const layersFor = (
   structure: string,
   detected: Record<string, string[]>,
   root: string,
-): Record<string, string[]> {
+): Record<string, string[]> => {
   if (structure === 'detected') return detected;
 
   const exists = (directory: string): boolean => fs.existsSync(path.join(root, directory));
@@ -167,9 +167,9 @@ function layersFor(
     };
   }
   return detected;
-}
+};
 
-function topLevelDirectories(root: string): string[] {
+const topLevelDirectories = (root: string): string[] => {
   const skip = new Set([
     'node_modules',
     '.git',
@@ -200,7 +200,7 @@ function topLevelDirectories(root: string): string[] {
   } catch {
     return [];
   }
-}
+};
 
 const SUPPORT_DIRECTORIES = new Set([
   'scripts',
@@ -212,16 +212,14 @@ const SUPPORT_DIRECTORIES = new Set([
   'tools',
 ]);
 
-function isProbablySupport(directory: string): boolean {
-  return SUPPORT_DIRECTORIES.has(directory);
-}
+const isProbablySupport = (directory: string): boolean => SUPPORT_DIRECTORIES.has(directory);
 
-function guessRole(directory: string): string {
+const guessRole = (directory: string): string => {
   if (isProbablySupport(directory)) return 'support';
   if (['app', 'pages', 'components', 'ui'].includes(directory)) return 'interface';
   if (['services', 'lib', 'domain', 'core'].includes(directory)) return 'logic';
   return '';
-}
+};
 
 interface ConfigTemplate {
   strictness: Strictness;
@@ -229,7 +227,7 @@ interface ConfigTemplate {
   layers: Record<string, string[]>;
 }
 
-export function renderConfigFile(template: ConfigTemplate): string {
+export const renderConfigFile = (template: ConfigTemplate): string => {
   const defaults = baseConfig(template.strictness);
   const layerEntries = Object.entries(template.layers).filter(([, dirs]) => dirs.length > 0);
 
@@ -272,9 +270,9 @@ ${layerEntries.map(([layer, dirs]) => `      ${layer}: ${JSON.stringify(dirs)},`
   },
 });
 `;
-}
+};
 
-function writeConfigFile(root: string, template: ConfigTemplate): string {
+const writeConfigFile = (root: string, template: ConfigTemplate): string => {
   const directory = ensureConfigDir(root);
   const file = path.join(directory, 'config.ts');
   fs.writeFileSync(file, renderConfigFile(template));
@@ -283,4 +281,4 @@ function writeConfigFile(root: string, template: ConfigTemplate): string {
   // local review log do not. `ensureConfigDir` has already written the ignore
   // file that keeps them apart.
   return file;
-}
+};

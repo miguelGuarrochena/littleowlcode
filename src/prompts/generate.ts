@@ -17,7 +17,7 @@ export interface PromptOptions {
   includeExisting?: boolean;
 }
 
-export function generatePrompt(review: ReviewResult, options: PromptOptions = {}): string {
+export const generatePrompt = (review: ReviewResult, options: PromptOptions = {}): string => {
   const maxInstructions = options.maxInstructions ?? 6;
   const pool = options.includeExisting
     ? review.current.findings
@@ -60,10 +60,10 @@ export function generatePrompt(review: ReviewResult, options: PromptOptions = {}
   ];
 
   return lines.join('\n');
-}
+};
 
 /** Rule-specific phrasing, falling back to the finding's own suggestion. */
-function instructionFor(finding: Finding): string {
+const instructionFor = (finding: Finding): string => {
   const where = finding.file ? ` in ${finding.file}` : '';
 
   switch (finding.id) {
@@ -93,4 +93,4 @@ function instructionFor(finding: Finding): string {
     default:
       return finding.suggestion ?? `${finding.title}${where}.`;
   }
-}
+};

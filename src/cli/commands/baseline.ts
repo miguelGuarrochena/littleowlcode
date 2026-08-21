@@ -37,7 +37,7 @@ export interface BaselineOptions extends GlobalOptions {
  * Updating the baseline is always an explicit act. Refreshing it after every
  * AI iteration would quietly redefine healthy as "whatever the code is now".
  */
-export async function baselineCommand(options: BaselineOptions): Promise<number> {
+export const baselineCommand = async (options: BaselineOptions): Promise<number> => {
   const root = resolveRoot(options);
   const existing = readBaseline(root);
 
@@ -131,7 +131,7 @@ export async function baselineCommand(options: BaselineOptions): Promise<number>
     `${colors.green(icons.ok)} Baseline saved to ${colors.bold(path.relative(root, baselinePath(root)))}`,
   );
   return 0;
-}
+};
 
 export interface HistoryOptions extends GlobalOptions {
   limit?: number;
@@ -139,7 +139,7 @@ export interface HistoryOptions extends GlobalOptions {
 }
 
 /** `little-owl compare` — the last few runs against the same baseline. */
-export function compareCommand(options: HistoryOptions): number {
+export const compareCommand = (options: HistoryOptions): number => {
   const root = resolveRoot(options);
   const entries = latestEntries(root, options.limit ?? 10);
 
@@ -178,4 +178,4 @@ export function compareCommand(options: HistoryOptions): number {
 
   print(dim('The baseline stays where you put it until you run `little-owl baseline`.'));
   return 0;
-}
+};

@@ -54,11 +54,11 @@ export interface NewFinding {
  * Returns `null` when the rule is switched off, which keeps rule bodies free of
  * severity checks.
  */
-export function createFinding(
+export const createFinding = (
   rule: Pick<Rule, 'id' | 'category'>,
   context: AnalysisContext,
   input: NewFinding,
-): Finding | null {
+): Finding | null => {
   const severity = severityOf(rule.id, context.config);
   if (severity === 'off') return null;
 
@@ -76,20 +76,20 @@ export function createFinding(
     baseline: input.baseline,
     current: input.current,
   };
-}
+};
 
-export function severityOf(ruleId: string, config: ResolvedConfig): Severity {
+export const severityOf = (ruleId: string, config: ResolvedConfig): Severity => {
   return config.rules[ruleId] ?? 'off';
-}
+};
 
-export function isEnabled(ruleId: string, config: ResolvedConfig): boolean {
+export const isEnabled = (ruleId: string, config: ResolvedConfig): boolean => {
   return severityOf(ruleId, config) !== 'off';
-}
+};
 
 /** Findings sort by severity, then category, then file, so output is stable. */
 const SEVERITY_RANK: Record<ReportedSeverity, number> = { error: 0, warning: 1, info: 2 };
 
-export function sortFindings(findings: Finding[]): Finding[] {
+export const sortFindings = (findings: Finding[]): Finding[] => {
   return [...findings].sort((a, b) => {
     const bySeverity = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
     if (bySeverity !== 0) return bySeverity;
@@ -99,4 +99,4 @@ export function sortFindings(findings: Finding[]): Finding[] {
     if (fileA !== fileB) return fileA < fileB ? -1 : 1;
     return (a.line ?? 0) - (b.line ?? 0);
   });
-}
+};

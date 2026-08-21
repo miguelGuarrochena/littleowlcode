@@ -20,7 +20,7 @@ const SEVERITY_PAINT: Record<Severity, (text: string) => string> = {
 };
 
 /** `little-owl config` — what settings are actually in effect. */
-export async function configCommand(options: ConfigOptions): Promise<number> {
+export const configCommand = async (options: ConfigOptions): Promise<number> => {
   const root = resolveRoot(options);
   const config = await loadConfig(root);
 
@@ -92,4 +92,4 @@ export async function configCommand(options: ConfigOptions): Promise<number> {
     dim(`${active} of ${allRules.length} rules active. ${icons.arrow} little-owl config --rules`),
   );
   return 0;
-}
+};

@@ -45,7 +45,7 @@ const MAX_IMPACTED = 200;
  * Everything here is phrased as *potentially* affected: reachability through
  * imports is a real signal, but it is not proof that behaviour changes.
  */
-export function analyzeImpact(context: AnalysisContext, changed: string[]): ImpactReport {
+export const analyzeImpact = (context: AnalysisContext, changed: string[]): ImpactReport => {
   const distances = new Map<string, number>();
 
   for (const file of changed) {
@@ -98,13 +98,13 @@ export function analyzeImpact(context: AnalysisContext, changed: string[]): Impa
       : null,
     truncated: impacted.length > MAX_IMPACTED,
   };
-}
+};
 
 /**
  * Risk is about reach, not correctness: a change touching a module a third of
  * the codebase depends on is risky even if the change itself is trivial.
  */
-function assessRisk(impacted: ImpactedFile[], routes: string[], totalFiles: number): RiskLevel {
+const assessRisk = (impacted: ImpactedFile[], routes: string[], totalFiles: number): RiskLevel => {
   if (impacted.length === 0) return 'low';
 
   const direct = impacted.filter((entry) => entry.level === 'high').length;
@@ -115,30 +115,30 @@ function assessRisk(impacted: ImpactedFile[], routes: string[], totalFiles: numb
   if ((share >= 0.2 && impacted.length >= 5) || direct >= 10 || routes.length >= 4) return 'high';
   if ((share >= 0.05 && impacted.length >= 2) || direct >= 3 || routes.length >= 1) return 'medium';
   return 'low';
-}
+};
 
-function levelFor(distance: number): ImpactLevel {
+const levelFor = (distance: number): ImpactLevel => {
   if (distance <= 1) return 'high';
   if (distance <= 3) return 'medium';
   return 'low';
-}
+};
 
 /** Next.js, Remix and Nuxt style entry points, plus classic route folders. */
-function isRouteLike(file: string): boolean {
+const isRouteLike = (file: string): boolean => {
   const name = basename(file);
   if (/^(page|route|layout|index)\.[cm]?[jt]sx?$/.test(name)) return true;
   return /(^|\/)(routes|pages|views|screens)\//.test(file);
-}
+};
 
 /**
  * Turns a route path into the URL a developer would recognise, e.g.
  * `app/orders/[id]/page.tsx` -> `/orders/[id]`.
  */
-export function routeLabel(file: string): string {
+export const routeLabel = (file: string): string => {
   const directory = dirOf(file);
   const cleaned = directory
     .replace(/^(src\/)?(app|pages|routes)\/?/, '')
     .replace(/\/?\([^/]*\)/g, '')
     .replace(/^\/+/, '');
   return `/${cleaned}`.replace(/\/$/, '') || '/';
-}
+};

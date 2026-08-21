@@ -18,16 +18,14 @@ export interface UnresolvedImport {
  * Specifiers that are assets rather than modules.
  *
  * Bundlers let you `import './globals.css'` or `import logo from './logo.png'`.
- * Little Owl only reads source files, so those imports can never resolve — and
- * reporting them as unresolved told every frontend project it had a broken
- * path alias, while quietly costing it dependency-score points.
+ * Little Owl only reads source files, so those specifiers can never resolve —
+ * and calling them unresolved would report a broken path alias that is not
+ * there, while costing the project dependency-score points.
  */
 const ASSET_EXTENSION =
   /\.(css|scss|sass|less|styl|svg|png|jpe?g|gif|webp|avif|ico|bmp|woff2?|ttf|otf|eot|mp[34]|webm|wav|ogg|pdf|txt|md|mdx|csv|ya?ml|json|json5|graphql|gql|wasm|glsl|frag|vert)(\?.*)?$/i;
 
-export function isAssetImport(specifier: string): boolean {
-  return ASSET_EXTENSION.test(specifier);
-}
+export const isAssetImport = (specifier: string): boolean => ASSET_EXTENSION.test(specifier);
 
 /**
  * File-level import graph for the whole project.
@@ -137,9 +135,8 @@ export class DependencyGraph {
    * path over a DAG. Tarjan emits components in reverse topological order, so
    * one pass in emission order is enough — every successor is already known.
    *
-   * The previous implementation walked paths instead of nodes, which meant a
-   * graph with any branching was explored exponentially. Nothing about the
-   * result changes for acyclic graphs; what changes is that it finishes.
+   * Walking nodes rather than paths is what keeps this linear: a graph with any
+   * branching has exponentially more paths than nodes.
    */
   private depths(): Map<string, number> {
     if (this.depthCache) return this.depthCache;
@@ -181,7 +178,7 @@ export class DependencyGraph {
  * Files an import points at something outside the project: a package, an asset,
  * or nothing Little Owl can account for.
  */
-function recordUnresolved(graph: DependencyGraph, from: string, reference: ImportRef): void {
+const recordUnresolved = (graph: DependencyGraph, from: string, reference: ImportRef): void => {
   const packageName = packageNameOf(reference.raw);
   if (packageName) {
     // `bootstrap/dist/bootstrap.css` still means bootstrap is in use, so the
@@ -196,12 +193,12 @@ function recordUnresolved(graph: DependencyGraph, from: string, reference: Impor
   if (isAssetImport(reference.raw)) return;
 
   graph.unresolved.push({ file: from, specifier: reference.raw, line: reference.line });
-}
+};
 
-export function buildDependencyGraph(
+export const buildDependencyGraph = (
   files: ParsedFile[],
   context: ResolverContext,
-): DependencyGraph {
+): DependencyGraph => {
   const graph = new DependencyGraph();
   for (const file of files) graph.addNode(file.path);
 
@@ -254,4 +251,4 @@ export function buildDependencyGraph(
   }
 
   return graph;
-}
+};

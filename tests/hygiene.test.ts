@@ -23,10 +23,9 @@ afterEach(() => {
 });
 
 /**
- * The `unused-dependency` rule and the `little-owl dependencies` report used to
- * decide separately whether a package counted as used, so the same project
- * could be told its dependencies "line up" by one and that eslint was unused by
- * the other. Both now go through `src/detect/dependencies.ts`.
+ * The `unused-dependency` rule and the `little-owl dependencies` report answer
+ * the same question, so they share `src/detect/dependencies.ts` and cannot
+ * disagree about a package.
  */
 describe('dependency usage', () => {
   const TOOLING = ['eslint', 'prettier', 'tsup', 'vitest', '@vitest/coverage-v8', '@types/node'];
@@ -77,18 +76,17 @@ describe('dependency usage', () => {
 });
 
 /**
- * A scan that stops at the file limit used to look exactly like a complete
- * one, so every score described part of the repository while claiming to
- * describe all of it.
+ * A scan that stops at the file limit describes part of the repository. Saying
+ * so is the difference between a sample and a measurement.
  */
 describe('scan truncation', () => {
-  function manyFiles(count: number): Record<string, string> {
+  const manyFiles = (count: number): Record<string, string> => {
     const files: Record<string, string> = { 'package.json': '{"name":"wide"}' };
     for (let index = 0; index < count; index += 1) {
       files[`src/m${index}.ts`] = `export const value${index} = ${index};\n`;
     }
     return files;
-  }
+  };
 
   it('reports a complete scan as complete', async () => {
     project = TempProject.create(manyFiles(4));
@@ -132,9 +130,8 @@ describe('scan truncation', () => {
 });
 
 /**
- * The parse cache is machine state. It used to be written into a directory
- * with no ignore file unless the developer had run `init`, which is how a cache
- * fixture ended up committed to this very repository.
+ * The parse cache is machine state and has no business in version control, so
+ * the ignore file has to exist whether or not `init` was ever run.
  */
 describe('local state stays out of git', () => {
   const ignorePath = (root: string): string => path.join(root, '.little-owl', '.gitignore');
@@ -194,9 +191,8 @@ describe('local state stays out of git', () => {
 /**
  * Findings a real project would reject.
  *
- * Each of these came out of running Little Owl against six real repositories
- * before the first release. They are pinned here because a false positive at
- * error level costs more trust than the true findings around it earn.
+ * Pinned because a false positive at error level costs more trust than the
+ * true findings around it earn.
  */
 describe('false positives found while dogfooding', () => {
   it('does not flag a client component for calling a server action', async () => {
@@ -274,8 +270,8 @@ describe('false positives found while dogfooding', () => {
 });
 
 /**
- * A project where nothing was scanned used to score 100 on every metric,
- * because there was nothing to lose points for.
+ * With nothing scanned every metric sits at 100, because there is nothing to
+ * lose points for. That number must never reach the reader as a score.
  */
 describe('empty analysis', () => {
   it('reports that nothing was analysed instead of a perfect score', async () => {
@@ -316,10 +312,9 @@ describe('empty analysis', () => {
 
 /**
  * The parse cache stores `ParsedFile` as JSON and reuses it across runs, so a
- * field added to that shape has to survive the round trip — and any entry
- * written before the field existed has to be thrown away. Unused-export
- * detection first shipped reporting live code as unused precisely because
- * stale entries were still considered valid.
+ * field added to that shape has to survive the round trip. An entry written
+ * before the field existed has to be discarded rather than reused, or the
+ * rules reading that field silently see nothing.
  */
 describe('parse cache and the shape it stores', () => {
   it('preserves the names an import takes from a module', async () => {

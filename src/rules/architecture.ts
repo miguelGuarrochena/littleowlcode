@@ -8,11 +8,10 @@ import { compilePattern, matchesCompiled } from '../utils/glob.js';
  *
  * `package/__init__.py` importing `package/thing.py` which imports the package
  * back is the ordinary way Python packages are written, and it works because
- * imports are resolved lazily at call time. Reporting it as a structural error
- * would flag almost every Python package ever published, this tool's own
- * dependencies included.
+ * imports resolve lazily at call time. Reporting it would flag almost every
+ * published Python package.
  */
-function isPackageInitCycle(files: string[]): boolean {
+const isPackageInitCycle = (files: string[]): boolean => {
   const inits = files.filter((file) => file.endsWith('/__init__.py') || file === '__init__.py');
   if (inits.length === 0) return false;
 
@@ -23,7 +22,7 @@ function isPackageInitCycle(files: string[]): boolean {
   return files.every(
     (file) => inits.includes(file) || packages.some((directory) => file.startsWith(directory)),
   );
-}
+};
 
 const circularDependency: Rule = {
   id: 'architecture/circular-dependency',
@@ -76,11 +75,11 @@ const layerSkip: Rule = {
   },
 };
 
-function layerFindings(
+const layerFindings = (
   context: AnalysisContext,
   rule: Pick<Rule, 'id' | 'category'>,
   wanted: 'inverted' | 'skip',
-): Finding[] {
+): Finding[] => {
   const { layers } = context;
   if (layers.order.length < 2) return [];
 
@@ -126,12 +125,12 @@ function layerFindings(
   }
 
   return findings;
-}
+};
 
-function nextLayer(layer: string, order: string[]): string {
+const nextLayer = (layer: string, order: string[]): string => {
   const index = order.indexOf(layer);
   return order[index + 1] ?? 'the next layer';
-}
+};
 
 const crossFeatureImport: Rule = {
   id: 'architecture/cross-feature-import',

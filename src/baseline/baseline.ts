@@ -6,11 +6,11 @@ import { ensureConfigDir } from '../config/load.js';
 
 export const BASELINE_VERSION = '1';
 
-export function baselinePath(root: string): string {
+export const baselinePath = (root: string): string => {
   return path.join(root, '.little-owl', 'baseline.json');
-}
+};
 
-export function readBaseline(root: string): Baseline | null {
+export const readBaseline = (root: string): Baseline | null => {
   const file = baselinePath(root);
   if (!fs.existsSync(file)) return null;
   try {
@@ -20,9 +20,9 @@ export function readBaseline(root: string): Baseline | null {
   } catch {
     return null;
   }
-}
+};
 
-export function buildBaseline(root: string, result: AnalysisResult): Baseline {
+export const buildBaseline = (root: string, result: AnalysisResult): Baseline => {
   return {
     version: BASELINE_VERSION,
     createdAt: new Date().toISOString(),
@@ -33,19 +33,19 @@ export function buildBaseline(root: string, result: AnalysisResult): Baseline {
     findings: result.findings,
     fileMetrics: result.fileMetrics,
   };
-}
+};
 
 /**
  * Writes the baseline. This is always an explicit action: Little Owl never
  * refreshes the baseline on its own, because a baseline that follows the code
  * downhill would hide exactly the drift it exists to catch.
  */
-export function writeBaseline(root: string, baseline: Baseline): string {
+export const writeBaseline = (root: string, baseline: Baseline): string => {
   ensureConfigDir(root);
   const file = baselinePath(root);
   fs.writeFileSync(file, `${JSON.stringify(baseline, null, 2)}\n`);
   return file;
-}
+};
 
 export interface BaselineComparison {
   drift: Record<MetricKey, number>;
@@ -53,7 +53,10 @@ export interface BaselineComparison {
   resolvedFindings: Finding[];
 }
 
-export function compareToBaseline(baseline: Baseline, result: AnalysisResult): BaselineComparison {
+export const compareToBaseline = (
+  baseline: Baseline,
+  result: AnalysisResult,
+): BaselineComparison => {
   const baselineFingerprints = new Set(baseline.findings.map((finding) => finding.fingerprint));
   const currentFingerprints = new Set(result.findings.map((finding) => finding.fingerprint));
 
@@ -66,20 +69,20 @@ export function compareToBaseline(baseline: Baseline, result: AnalysisResult): B
       (finding) => !currentFingerprints.has(finding.fingerprint),
     ),
   };
-}
+};
 
-export function metricDrift(before: Metrics, after: Metrics): Record<MetricKey, number> {
+export const metricDrift = (before: Metrics, after: Metrics): Record<MetricKey, number> => {
   const keys = Object.keys(before) as MetricKey[];
   const drift = {} as Record<MetricKey, number>;
   for (const key of keys) drift[key] = after[key] - before[key];
   return drift;
-}
+};
 
 /**
  * Explains a metric change in terms of the counts behind it, so "architecture
  * dropped 7 points" can always be turned into "because of these two cycles".
  */
-export function explainDrift(baseline: Baseline, result: AnalysisResult): string[] {
+export const explainDrift = (baseline: Baseline, result: AnalysisResult): string[] => {
   const reasons: string[] = [];
   const before = baseline.stats;
   const after = result.stats;
@@ -107,4 +110,4 @@ export function explainDrift(baseline: Baseline, result: AnalysisResult): string
   }
 
   return reasons;
-}
+};

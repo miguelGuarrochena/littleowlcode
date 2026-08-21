@@ -17,17 +17,15 @@ const CLASS_RE = /^(\s*)class\s+([A-Za-z_]\w*)/;
 const DECISION_RE = /(^|\s)(if|elif|for|while|except|assert|and|or)(\s|:|$)/g;
 const MUTABLE_DEFAULT_RE = /=\s*(\[\s*\]|\{\s*\}|set\(\)|list\(\)|dict\(\))/;
 
-function indentOf(line: string): number {
+const indentOf = (line: string): number => {
   const match = /^(\s*)/.exec(line);
   return match ? match[1]!.replace(/\t/g, '    ').length : 0;
-}
+};
 
-function isBlank(line: string): boolean {
-  return line.trim().length === 0 || line.trim().startsWith('#');
-}
+const isBlank = (line: string): boolean => line.trim().length === 0 || line.trim().startsWith('#');
 
 /** Finds the last line of a block that starts at `startIndex` with `indent`. */
-function blockEnd(lines: string[], startIndex: number, indent: number): number {
+const blockEnd = (lines: string[], startIndex: number, indent: number): number => {
   let end = startIndex;
   for (let i = startIndex + 1; i < lines.length; i += 1) {
     const line = lines[i]!;
@@ -36,9 +34,9 @@ function blockEnd(lines: string[], startIndex: number, indent: number): number {
     end = i;
   }
   return end;
-}
+};
 
-function collectFunctions(lines: string[]): FunctionInfo[] {
+const collectFunctions = (lines: string[]): FunctionInfo[] => {
   const functions: FunctionInfo[] = [];
 
   lines.forEach((line, index) => {
@@ -77,9 +75,9 @@ function collectFunctions(lines: string[]): FunctionInfo[] {
   });
 
   return functions;
-}
+};
 
-function collectImports(lines: string[]): ImportRef[] {
+const collectImports = (lines: string[]): ImportRef[] => {
   const imports: ImportRef[] = [];
 
   lines.forEach((line, index) => {
@@ -97,9 +95,9 @@ function collectImports(lines: string[]): ImportRef[] {
   });
 
   return imports;
-}
+};
 
-function collectMarkers(lines: string[]): Marker[] {
+const collectMarkers = (lines: string[]): Marker[] => {
   const markers: Marker[] = [];
 
   lines.forEach((line, index) => {
@@ -116,9 +114,9 @@ function collectMarkers(lines: string[]): Marker[] {
   });
 
   return markers;
-}
+};
 
-function collectExports(lines: string[]): string[] {
+const collectExports = (lines: string[]): string[] => {
   const names: string[] = [];
   for (const line of lines) {
     if (indentOf(line) !== 0) continue;
@@ -131,7 +129,7 @@ function collectExports(lines: string[]): string[] {
     if (defMatch && !defMatch[2]!.startsWith('_')) names.push(defMatch[2]!);
   }
   return names;
-}
+};
 
 export const pythonAdapter: LanguageAdapter = {
   language: 'python',

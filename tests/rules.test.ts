@@ -9,12 +9,12 @@ afterEach(() => {
   project = null;
 });
 
-function bigFunction(name: string, lines: number): string {
+const bigFunction = (name: string, lines: number): string => {
   const body = Array.from({ length: lines }, (_, index) => `  const v${index} = ${index};`).join(
     '\n',
   );
   return `export function ${name}() {\n${body}\n  return 0;\n}\n`;
-}
+};
 
 describe('complexity rules', () => {
   it('reports files and functions past their budget', async () => {
@@ -253,9 +253,9 @@ describe('rule severity configuration', () => {
 });
 
 /**
- * The duplicate scan slides an N-line window, so one copy-pasted region used to
- * arrive as a couple of dozen overlapping findings. Real projects went from
- * roughly fifty of them to under twenty once regions were merged.
+ * The scan slides an N-line window, so a copy-pasted region matches at every
+ * offset inside it. Those overlapping matches have to collapse back into one
+ * region, or a single problem is reported a couple of dozen times.
  */
 describe('duplicate blocks', () => {
   const region = Array.from(

@@ -34,12 +34,12 @@ program
   .helpOption('-h, --help', 'show help');
 
 /** Options declared on the root command are shared by every subcommand. */
-function globals(): { cwd?: string } {
+const globals = (): { cwd?: string } => {
   const options = program.opts<{ cwd?: string }>();
   return options.cwd ? { cwd: options.cwd } : {};
-}
+};
 
-function list(value: string, previous: string[] = []): string[] {
+const list = (value: string, previous: string[] = []): string[] => {
   return [
     ...previous,
     ...value
@@ -47,7 +47,7 @@ function list(value: string, previous: string[] = []): string[] {
       .map((entry) => entry.trim())
       .filter(Boolean),
   ];
-}
+};
 
 program
   .command('init')
@@ -250,7 +250,7 @@ program.action(async () => {
   await run(() => interactiveCommand(globals()));
 });
 
-async function run(command: () => Promise<number> | number): Promise<void> {
+const run = async (command: () => Promise<number> | number): Promise<void> => {
   try {
     process.exitCode = await command();
   } catch (error) {
@@ -261,7 +261,7 @@ async function run(command: () => Promise<number> | number): Promise<void> {
     }
     process.exitCode = 1;
   }
-}
+};
 
 program.parseAsync(process.argv).catch((error: unknown) => {
   printError(error instanceof Error ? error.message : String(error));

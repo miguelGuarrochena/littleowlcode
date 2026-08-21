@@ -18,7 +18,7 @@ export interface ReviewOptions {
 
 const SCOPE_RULE = { id: 'scope/out-of-scope-change', category: 'scope' as const };
 
-export async function runReview(options: ReviewOptions): Promise<ReviewResult> {
+export const runReview = async (options: ReviewOptions): Promise<ReviewResult> => {
   const config = await loadConfig(options.root);
   const changes = detectChanges(options.root, options.base ? { base: options.base } : {});
 
@@ -55,14 +55,14 @@ export async function runReview(options: ReviewOptions): Promise<ReviewResult> {
     scope,
     drift: comparison?.drift ?? null,
   };
-}
+};
 
 /**
  * Scope is not a configurable rule — it comes from what the developer said the
  * change was for — so the finding is built directly rather than through the
  * rule pipeline.
  */
-function buildScopeFinding(scope: ScopeResult): Finding | null {
+const buildScopeFinding = (scope: ScopeResult): Finding | null => {
   if (scope.outOfScope.length === 0) return null;
   const count = scope.outOfScope.length;
 
@@ -80,25 +80,24 @@ function buildScopeFinding(scope: ScopeResult): Finding | null {
       'Check whether those edits were intended. If they were, widen the scope; if not, revert them.',
     current: scope.outOfScope,
   };
-}
+};
 
 /**
  * A review is judged on what the change introduced, not on problems that were
  * already there. That distinction is the whole point of having a baseline.
  */
-export function determineStatus(
+export const determineStatus = (
   findings: Finding[],
   drift: Record<MetricKey, number> | null,
   scope: ScopeResult | null,
   hasBaseline = true,
-): ReviewStatus {
+): ReviewStatus => {
   const hasErrors = findings.some((finding) => finding.severity === 'error');
   const outOfScope = (scope?.outOfScope.length ?? 0) > 0;
 
   // Without a baseline there is no drift to judge, and every pre-existing
-  // finding counts as "new" — which used to greet a healthy first run with
-  // NEEDS REVIEW. Report the state of the code instead of a change that
-  // cannot be measured yet.
+  // finding would count as "new". Report the state of the code rather than a
+  // change that cannot be measured yet.
   if (!hasBaseline) {
     if (hasErrors) return 'degraded';
     return outOfScope ? 'needs-review' : 'healthy';
@@ -111,4 +110,4 @@ export function determineStatus(
   if (hasNewWarnings || overallDrop > 0 || outOfScope) return 'needs-review';
 
   return 'healthy';
-}
+};

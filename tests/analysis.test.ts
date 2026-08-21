@@ -93,9 +93,8 @@ describe('go analysis', () => {
 
 /**
  * `package/__init__.py` importing a submodule that imports the package back is
- * how Python packages are normally written — it works because imports resolve
- * lazily. Reporting it flagged seven "errors" in pip alone, all of them
- * idiomatic.
+ * how Python packages are normally written, and it works because imports
+ * resolve lazily at call time. It is not a structural error.
  */
 describe('python package cycles', () => {
   it('ignores a package re-exporting its own submodule', async () => {

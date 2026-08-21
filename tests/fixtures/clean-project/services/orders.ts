@@ -4,6 +4,6 @@ export interface Order {
   id: string;
 }
 
-export function listOrders(): Order[] {
+export const listOrders = (): Order[] => {
   return query<Order>('select * from orders');
-}
+};

@@ -53,13 +53,13 @@ const CONVENTIONAL_NAMES = new Set([
  * Names a file actually defines, as opposed to re-exports. A barrel file that
  * forwards `formatDate` is not a second implementation of it.
  */
-function definedExports(file: ParsedFile): string[] {
+const definedExports = (file: ParsedFile): string[] => {
   const exported = new Set(file.exports);
   return file.functions
     .filter((fn) => exported.has(fn.name))
     .map((fn) => fn.name)
     .filter((name) => !CONVENTIONAL_NAMES.has(name) && name.length >= 4);
-}
+};
 
 interface SharedNameGroup {
   files: string[];
@@ -75,7 +75,7 @@ interface SharedNameGroup {
  * same 140-function interface is *one* situation; reporting it 140 times would
  * bury everything else in the run.
  */
-function sharedNameGroups(context: AnalysisContext): SharedNameGroup[] {
+const sharedNameGroups = (context: AnalysisContext): SharedNameGroup[] => {
   const byName = new Map<string, string[]>();
 
   for (const file of context.files) {
@@ -104,7 +104,7 @@ function sharedNameGroups(context: AnalysisContext): SharedNameGroup[] {
       intentional: intentionalReason(context, group.files),
     }))
     .sort((a, b) => (a.files.join() < b.files.join() ? -1 : 1));
-}
+};
 
 /**
  * Recognises overlaps that are a design, not an accident.
@@ -113,7 +113,7 @@ function sharedNameGroups(context: AnalysisContext): SharedNameGroup[] {
  * module that picks between them — deliberately gives both the same signatures.
  * Flagging it would be telling the developer their architecture is a mistake.
  */
-function intentionalReason(context: AnalysisContext, files: string[]): string | null {
+const intentionalReason = (context: AnalysisContext, files: string[]): string | null => {
   for (const file of files) {
     const others = files.filter((other) => other !== file);
     const dependencies = context.graph.dependenciesOf(file);
@@ -132,7 +132,7 @@ function intentionalReason(context: AnalysisContext, files: string[]): string | 
   }
 
   return null;
-}
+};
 
 /** Below this, an overlap reads as a repeated helper rather than a whole module. */
 const PARALLEL_THRESHOLD = 3;

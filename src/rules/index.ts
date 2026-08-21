@@ -20,9 +20,7 @@ export const allRules: Rule[] = [
   ...dependencyRules,
 ];
 
-export function ruleById(id: string): Rule | undefined {
-  return allRules.find((rule) => rule.id === id);
-}
+export const ruleById = (id: string): Rule | undefined => allRules.find((rule) => rule.id === id);
 
 export {
   patternRules,

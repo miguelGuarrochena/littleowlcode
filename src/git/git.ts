@@ -10,7 +10,7 @@ export interface GitOptions {
   root: string;
 }
 
-function git(root: string, args: string[]): string | null {
+const git = (root: string, args: string[]): string | null => {
   try {
     return execFileSync('git', args, {
       cwd: root,
@@ -21,39 +21,37 @@ function git(root: string, args: string[]): string | null {
   } catch {
     return null;
   }
-}
+};
 
-export function isGitRepository(root: string): boolean {
+export const isGitRepository = (root: string): boolean => {
   return git(root, ['rev-parse', '--is-inside-work-tree']) === 'true';
-}
+};
 
-export function currentBranch(root: string): string | null {
+export const currentBranch = (root: string): string | null => {
   return git(root, ['rev-parse', '--abbrev-ref', 'HEAD']);
-}
+};
 
-export function headCommit(root: string): string | null {
-  return git(root, ['rev-parse', 'HEAD']);
-}
+export const headCommit = (root: string): string | null => git(root, ['rev-parse', 'HEAD']);
 
-export function shortCommit(root: string, ref = 'HEAD'): string | null {
+export const shortCommit = (root: string, ref = 'HEAD'): string | null => {
   return git(root, ['rev-parse', '--short', ref]);
-}
+};
 
-export function hasUncommittedChanges(root: string): boolean {
+export const hasUncommittedChanges = (root: string): boolean => {
   const status = git(root, ['status', '--porcelain']);
   return Boolean(status && status.length > 0);
-}
+};
 
-export function defaultBranch(root: string): string | null {
+export const defaultBranch = (root: string): string | null => {
   const remoteHead = git(root, ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD']);
   if (remoteHead) return remoteHead.replace('refs/remotes/origin/', '');
   for (const candidate of ['main', 'master', 'develop']) {
     if (git(root, ['rev-parse', '--verify', '--quiet', candidate])) return candidate;
   }
   return null;
-}
+};
 
-function parseNameStatus(output: string): ChangedFile[] {
+const parseNameStatus = (output: string): ChangedFile[] => {
   const files: ChangedFile[] = [];
   for (const line of output.split('\n')) {
     if (!line.trim()) continue;
@@ -79,9 +77,9 @@ function parseNameStatus(output: string): ChangedFile[] {
     files.push({ path: filePath, status, insertions: 0, deletions: 0 });
   }
   return files;
-}
+};
 
-function applyNumstat(files: ChangedFile[], output: string): void {
+const applyNumstat = (files: ChangedFile[], output: string): void => {
   const byPath = new Map(files.map((file) => [file.path, file]));
   for (const line of output.split('\n')) {
     if (!line.trim()) continue;
@@ -92,34 +90,34 @@ function applyNumstat(files: ChangedFile[], output: string): void {
     file.insertions = Number.parseInt(insertions ?? '0', 10) || 0;
     file.deletions = Number.parseInt(deletions ?? '0', 10) || 0;
   }
-}
+};
 
-function untrackedFiles(root: string): ChangedFile[] {
+const untrackedFiles = (root: string): ChangedFile[] => {
   const output = git(root, ['ls-files', '--others', '--exclude-standard']);
   if (!output) return [];
   return output
     .split('\n')
     .filter(Boolean)
     .map((path) => ({ path, status: 'untracked' as const, insertions: 0, deletions: 0 }));
-}
+};
 
-function diffAgainst(root: string, ref: string): ChangedFile[] {
+const diffAgainst = (root: string, ref: string): ChangedFile[] => {
   const nameStatus = git(root, ['diff', '--name-status', ref]);
   if (nameStatus === null) return [];
   const files = parseNameStatus(nameStatus);
   const numstat = git(root, ['diff', '--numstat', ref]);
   if (numstat) applyNumstat(files, numstat);
   return files;
-}
+};
 
-function diffRange(root: string, range: string): ChangedFile[] {
+const diffRange = (root: string, range: string): ChangedFile[] => {
   const nameStatus = git(root, ['diff', '--name-status', range]);
   if (nameStatus === null) return [];
   const files = parseNameStatus(nameStatus);
   const numstat = git(root, ['diff', '--numstat', range]);
   if (numstat) applyNumstat(files, numstat);
   return files;
-}
+};
 
 export interface ChangeQuery {
   /** Explicit git ref or range to compare against. */
@@ -132,7 +130,7 @@ export interface ChangeQuery {
  * Works out "what changed recently", trying the most local interpretation
  * first: uncommitted work, then the current branch, then the last commit.
  */
-export function detectChanges(root: string, query: ChangeQuery = {}): ChangeSet | null {
+export const detectChanges = (root: string, query: ChangeQuery = {}): ChangeSet | null => {
   if (!isGitRepository(root)) return null;
   const includeUntracked = query.includeUntracked ?? true;
 
@@ -168,12 +166,12 @@ export function detectChanges(root: string, query: ChangeQuery = {}): ChangeSet 
   }
 
   return { description: 'no changes detected', files: [] };
-}
+};
 
 /** Little Owl's own files are not part of the change being reviewed. */
 const SELF_MANAGED = /^\.little-owl\//;
 
-function dedupe(files: ChangedFile[]): ChangedFile[] {
+const dedupe = (files: ChangedFile[]): ChangedFile[] => {
   const byPath = new Map<string, ChangedFile>();
   for (const file of files) {
     if (SELF_MANAGED.test(file.path)) continue;
@@ -186,12 +184,12 @@ function dedupe(files: ChangedFile[]): ChangedFile[] {
     existing.deletions = Math.max(existing.deletions, file.deletions);
   }
   return [...byPath.values()].sort((a, b) => (a.path < b.path ? -1 : 1));
-}
+};
 
 /** Reads a file as it exists at a given ref, or `null` when absent there. */
-export function readFileAtRef(root: string, ref: string, file: string): string | null {
+export const readFileAtRef = (root: string, ref: string, file: string): string | null => {
   return git(root, ['show', `${ref}:${file}`]);
-}
+};
 
 export interface Commit {
   hash: string;
@@ -210,7 +208,7 @@ const FIELD = '\u001F';
 const RECORD = '\u001E';
 const LOG_FORMAT = `--pretty=format:%H${FIELD}%h${FIELD}%aI${FIELD}%an${FIELD}%s${FIELD}%b${RECORD}`;
 
-function parseLog(output: string | null): Commit[] {
+const parseLog = (output: string | null): Commit[] => {
   if (!output) return [];
   const commits: Commit[] = [];
 
@@ -230,7 +228,7 @@ function parseLog(output: string | null): Commit[] {
   }
 
   return commits;
-}
+};
 
 /**
  * Commits that touched a file, newest first.
@@ -238,26 +236,29 @@ function parseLog(output: string | null): Commit[] {
  * `--follow` keeps the history across renames, which matters when asking why a
  * file exists: a rename would otherwise hide its whole origin story.
  */
-export function fileHistory(root: string, file: string, limit = 50): Commit[] {
+export const fileHistory = (root: string, file: string, limit = 50): Commit[] => {
   return parseLog(git(root, ['log', '--follow', `-n${limit}`, LOG_FORMAT, '--', file]));
-}
+};
 
 /** The commit that introduced a file, or `null` when git has no record of it. */
-export function fileCreation(root: string, file: string): Commit | null {
+export const fileCreation = (root: string, file: string): Commit | null => {
   const history = parseLog(
     git(root, ['log', '--follow', '--diff-filter=A', '-n1', LOG_FORMAT, '--', file]),
   );
   return history[0] ?? null;
-}
+};
 
 /** How many commits touched a file — a rough proxy for how much it churns. */
-export function commitCount(root: string, file: string): number {
+export const commitCount = (root: string, file: string): number => {
   const output = git(root, ['rev-list', '--count', 'HEAD', '--', file]);
   return output ? Number.parseInt(output, 10) || 0 : 0;
-}
+};
 
 /** Distinct authors who touched a file, most frequent first. */
-export function fileAuthors(root: string, file: string): Array<{ name: string; commits: number }> {
+export const fileAuthors = (
+  root: string,
+  file: string,
+): Array<{ name: string; commits: number }> => {
   const output = git(root, ['shortlog', '-sn', '--no-merges', 'HEAD', '--', file]);
   if (!output) return [];
 
@@ -266,7 +267,7 @@ export function fileAuthors(root: string, file: string): Array<{ name: string; c
     .map((line) => /^\s*(\d+)\s+(.*)$/.exec(line.trim()))
     .filter((match): match is RegExpExecArray => match !== null)
     .map((match) => ({ name: match[2]!, commits: Number.parseInt(match[1]!, 10) || 0 }));
-}
+};
 
 /**
  * Files that changed together with `file` most often.
@@ -275,11 +276,11 @@ export function fileAuthors(root: string, file: string): Array<{ name: string; c
  * two files that always move together are related whether or not they import
  * each other.
  */
-export function coChangedFiles(
+export const coChangedFiles = (
   root: string,
   file: string,
   limit = 30,
-): Array<{ path: string; times: number }> {
+): Array<{ path: string; times: number }> => {
   const output = git(root, [
     'log',
     `-n${limit}`,
@@ -303,4 +304,4 @@ export function coChangedFiles(
   return [...counts.entries()]
     .map(([path, times]) => ({ path, times }))
     .sort((a, b) => b.times - a.times || (a.path < b.path ? -1 : 1));
-}
+};

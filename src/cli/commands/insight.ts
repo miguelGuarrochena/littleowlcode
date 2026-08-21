@@ -28,9 +28,9 @@ export interface InsightOptions extends GlobalOptions {
   cache?: boolean;
 }
 
-async function contextFor(
+const contextFor = async (
   options: InsightOptions,
-): Promise<{ root: string; context: AnalysisContext }> {
+): Promise<{ root: string; context: AnalysisContext }> => {
   const root = resolveRoot(options);
   const config = await loadConfig(root);
   const { context } = await analyzeProject({
@@ -39,7 +39,7 @@ async function contextFor(
     ...(options.cache === false ? { cache: false as const } : {}),
   });
   return { root, context };
-}
+};
 
 export interface DeadCodeOptions extends InsightOptions {
   minConfidence?: Confidence;
@@ -47,7 +47,7 @@ export interface DeadCodeOptions extends InsightOptions {
 }
 
 /** `little-owl dead-code` — files nothing appears to reach. */
-export async function deadCodeCommand(options: DeadCodeOptions): Promise<number> {
+export const deadCodeCommand = async (options: DeadCodeOptions): Promise<number> => {
   const { context } = await contextFor(options);
   const report = findDeadCode(context, {
     ...(options.minConfidence ? { minConfidence: options.minConfidence } : {}),
@@ -63,7 +63,7 @@ export async function deadCodeCommand(options: DeadCodeOptions): Promise<number>
   print(renderDeadCode(report));
   print('');
   return 0;
-}
+};
 
 export interface TestGapOptions extends InsightOptions {
   /** Only look at what the current change touched. */
@@ -72,7 +72,7 @@ export interface TestGapOptions extends InsightOptions {
 }
 
 /** `little-owl tests` — behaviour that no test appears to watch. */
-export async function testsCommand(options: TestGapOptions): Promise<number> {
+export const testsCommand = async (options: TestGapOptions): Promise<number> => {
   const { root, context } = await contextFor(options);
 
   let files: string[] | undefined;
@@ -99,10 +99,10 @@ export async function testsCommand(options: TestGapOptions): Promise<number> {
   print(renderTestGaps(report));
   print('');
   return 0;
-}
+};
 
 /** `little-owl explain <file>` — why does this code exist? */
-export async function explainCommand(file: string, options: InsightOptions): Promise<number> {
+export const explainCommand = async (file: string, options: InsightOptions): Promise<number> => {
   const { root, context } = await contextFor(options);
   const relative = normalizeTarget(root, file);
   const report = explainFile(context, relative);
@@ -116,10 +116,10 @@ export async function explainCommand(file: string, options: InsightOptions): Pro
   print(renderArchaeology(report));
   print('');
   return report.exists ? 0 : 1;
-}
+};
 
 /** `little-owl map` — a first orientation in an unfamiliar codebase. */
-export async function mapCommand(options: InsightOptions): Promise<number> {
+export const mapCommand = async (options: InsightOptions): Promise<number> => {
   const { context } = await contextFor(options);
   const map = buildProjectMap(context);
 
@@ -132,18 +132,18 @@ export async function mapCommand(options: InsightOptions): Promise<number> {
   print(renderProjectMap(map));
   print('');
   return 0;
-}
+};
 
 /**
  * Turns whatever the user typed into a repo-relative POSIX path, so both
  * `src/a.ts` and an absolute path work.
  */
-export function normalizeTarget(root: string, target: string): string {
+export const normalizeTarget = (root: string, target: string): string => {
   const absolute = path.isAbsolute(target) ? target : path.resolve(root, target);
   return toPosix(path.relative(root, absolute));
-}
+};
 
-function filesAnalysedDetail(fileCount: number, truncated: boolean, elapsed: number): string {
+const filesAnalysedDetail = (fileCount: number, truncated: boolean, elapsed: number): string => {
   if (fileCount === 0) {
     return 'none — no .ts/.js/.py/.go files matched, so every score below is meaningless';
   }
@@ -154,7 +154,7 @@ function filesAnalysedDetail(fileCount: number, truncated: boolean, elapsed: num
     );
   }
   return `${fileCount} files in ${elapsed}ms`;
-}
+};
 
 interface DoctorCheck {
   name: string;
@@ -296,11 +296,11 @@ const CHECKS: CheckBuilder[] = [
   skippedCheck,
 ];
 
-function buildChecks(input: DoctorInput): DoctorCheck[] {
+const buildChecks = (input: DoctorInput): DoctorCheck[] => {
   return CHECKS.map((build) => build(input)).filter(
     (check): check is DoctorCheck => check !== null,
   );
-}
+};
 
 const CHECK_MARK: Record<DoctorCheck['status'], () => string> = {
   ok: () => colors.green(icons.ok),
@@ -308,7 +308,7 @@ const CHECK_MARK: Record<DoctorCheck['status'], () => string> = {
   info: () => dim(icons.info),
 };
 
-function printChecks(checks: DoctorCheck[], warnings: AnalysisWarning[]): void {
+const printChecks = (checks: DoctorCheck[], warnings: AnalysisWarning[]): void => {
   print('');
   print(`${icons.owl} ${colors.bold('Little Owl doctor')}`);
   print('');
@@ -336,9 +336,9 @@ function printChecks(checks: DoctorCheck[], warnings: AnalysisWarning[]): void {
         ),
   );
   print('');
-}
+};
 
-export async function doctorCommand(options: InsightOptions): Promise<number> {
+export const doctorCommand = async (options: InsightOptions): Promise<number> => {
   const root = resolveRoot(options);
   const config = await loadConfig(root);
   const started = Date.now();
@@ -363,4 +363,4 @@ export async function doctorCommand(options: InsightOptions): Promise<number> {
 
   printChecks(checks, result.warnings);
   return 0;
-}
+};

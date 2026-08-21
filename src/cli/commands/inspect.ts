@@ -15,7 +15,7 @@ export interface InspectOptions extends GlobalOptions {
 }
 
 /** `little-owl architecture` — how the code is layered, and where that breaks. */
-export async function architectureCommand(options: InspectOptions): Promise<number> {
+export const architectureCommand = async (options: InspectOptions): Promise<number> => {
   const root = resolveRoot(options);
   const config = await loadConfig(root);
   const { context } = await analyzeProject({
@@ -55,7 +55,7 @@ export async function architectureCommand(options: InspectOptions): Promise<numb
     print('');
   }
   return 0;
-}
+};
 
 export interface ImpactOptions extends InspectOptions {
   files?: string[];
@@ -63,7 +63,7 @@ export interface ImpactOptions extends InspectOptions {
 }
 
 /** `little-owl impact` — what else could this change touch? */
-export async function impactCommand(options: ImpactOptions): Promise<number> {
+export const impactCommand = async (options: ImpactOptions): Promise<number> => {
   const root = resolveRoot(options);
   const config = await loadConfig(root);
   const { context } = await analyzeProject({
@@ -97,10 +97,10 @@ export async function impactCommand(options: ImpactOptions): Promise<number> {
   print(renderImpact(report));
   print('');
   return 0;
-}
+};
 
 /** `little-owl dependencies` — declared vs actually imported packages. */
-export async function dependenciesCommand(options: InspectOptions): Promise<number> {
+export const dependenciesCommand = async (options: InspectOptions): Promise<number> => {
   const root = resolveRoot(options);
   const config = await loadConfig(root);
   const { context } = await analyzeProject({
@@ -129,4 +129,4 @@ export async function dependenciesCommand(options: InspectOptions): Promise<numb
   print(renderDependencies(context));
   print('');
   return 0;
-}
+};

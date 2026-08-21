@@ -3,17 +3,15 @@ import type { Finding } from '../core/types.js';
 import { createFinding, type Rule } from '../core/context.js';
 
 /** Lines that say nothing about duplication and would create false matches. */
-function isStructuralLine(line: string): boolean {
+const isStructuralLine = (line: string): boolean => {
   if (line.length < 8) return true;
   if (/^[}\]);,]+$/.test(line)) return true;
   if (line.startsWith('//') || line.startsWith('#') || line.startsWith('*')) return true;
   if (/^(import|export|from|package|use\s)/.test(line)) return true;
   return false;
-}
+};
 
-function normalize(line: string): string {
-  return line.trim().replace(/\s+/g, ' ');
-}
+const normalize = (line: string): string => line.trim().replace(/\s+/g, ' ');
 
 interface Block {
   file: string;
@@ -37,7 +35,7 @@ interface Region {
  * files at the same relative offsets are one region, and reporting it once —
  * with its real length — is both shorter and more accurate.
  */
-function mergeRegions(regions: Region[], window: number): Region[] {
+const mergeRegions = (regions: Region[], window: number): Region[] => {
   const byPlacement = new Map<string, Region[]>();
 
   for (const region of regions) {
@@ -69,7 +67,7 @@ function mergeRegions(regions: Region[], window: number): Region[] {
   return merged.sort(
     (a, b) => b.span - a.span || (a.files[0]! < b.files[0]! ? -1 : 1) || a.lines[0]! - b.lines[0]!,
   );
-}
+};
 
 const duplicateBlock: Rule = {
   id: 'maintainability/duplicate-block',
