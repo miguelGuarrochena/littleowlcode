@@ -89,6 +89,12 @@ export interface ImportRef {
   kind: 'import' | 'require' | 'dynamic' | 'export-from';
   line: number;
   typeOnly: boolean;
+  /**
+   * True when the specifier is built at runtime (`import(\`./x/${name}\`)`).
+   * Such an import can reach anything, so it caps confidence rather than
+   * contributing an edge.
+   */
+  computed?: boolean;
 }
 
 export interface FunctionInfo {
@@ -157,6 +163,8 @@ export interface ProjectInfo {
   fileCount: number;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
+  /** Raw `main`/`module`/`bin`/`exports` values from package.json, if any. */
+  entryPoints: unknown;
 }
 
 export interface ChangedFile {
@@ -193,12 +201,20 @@ export interface FileMetric {
   maxComplexity: number;
 }
 
+/** A file Little Owl could not process, and why. Never fatal. */
+export interface AnalysisWarning {
+  file?: string;
+  message: string;
+}
+
 export interface AnalysisResult {
   metrics: Metrics;
   stats: MetricStats;
   findings: Finding[];
   fileMetrics: Record<string, FileMetric>;
   project: ProjectInfo;
+  /** Files that were skipped. The analysis continues without them. */
+  warnings: AnalysisWarning[];
   durationMs: number;
 }
 

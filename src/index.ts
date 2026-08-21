@@ -41,6 +41,46 @@ export {
 } from './architecture/layers.js';
 export type { LayerModel, LayerRelation } from './architecture/layers.js';
 
+export { runReview, determineStatus } from './review/review.js';
+export type { ReviewOptions } from './review/review.js';
+export { checkScope, groupByArea } from './review/scope.js';
+export { analyzeImpact, routeLabel } from './review/impact.js';
+export type { ImpactReport, ImpactedFile, ImpactLevel, RiskLevel } from './review/impact.js';
+export { findDeadCode } from './review/dead-code.js';
+export type { DeadCodeReport, DeadCodeCandidate, Confidence } from './review/dead-code.js';
+export { analyzeTestGaps, changedFilesOf } from './review/test-gap.js';
+export type { TestGapReport, TestGap, Coverage } from './review/test-gap.js';
+export { explainFile } from './review/archaeology.js';
+export type { ArchaeologyReport, EvidenceStrength } from './review/archaeology.js';
+export { buildProjectMap } from './review/map.js';
+export type { ProjectMap, MapArea, CentralModule, ExternalService } from './review/map.js';
+
+export {
+  buildBaseline,
+  readBaseline,
+  writeBaseline,
+  compareToBaseline,
+  explainDrift,
+  baselinePath,
+} from './baseline/baseline.js';
+export { readHistory, appendHistory, latestEntries } from './baseline/history.js';
+export type { HistoryEntry } from './baseline/history.js';
+
+export { generatePrompt } from './prompts/generate.js';
+export type { PromptOptions } from './prompts/generate.js';
+
+export { checkToJson, reviewToJson, SCHEMA_VERSION } from './output/json.js';
+export type { JsonCheckOutput, JsonReviewOutput, JsonFinding } from './output/json.js';
+
+export {
+  detectChanges,
+  isGitRepository,
+  fileHistory,
+  fileCreation,
+  coChangedFiles,
+} from './git/git.js';
+export type { Commit, ChangeQuery } from './git/git.js';
+
 export { allRules, ruleById } from './rules/index.js';
 export { adapters, adapterFor, parseFile } from './languages/index.js';
 export type { LanguageAdapter, ParseInput } from './languages/index.js';

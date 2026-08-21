@@ -20,9 +20,34 @@ export interface LayerModel {
  */
 const CONVENTIONAL_LAYERS: Array<[string, string[]]> = [
   ['ui', ['app', 'pages', 'components', 'views', 'screens', 'ui', 'widgets', 'templates']],
-  ['application', ['services', 'application', 'usecases', 'use-cases', 'actions', 'controllers', 'handlers', 'api']],
+  [
+    'application',
+    [
+      'services',
+      'application',
+      'usecases',
+      'use-cases',
+      'actions',
+      'controllers',
+      'handlers',
+      'api',
+    ],
+  ],
   ['domain', ['domain', 'entities', 'models', 'core', 'business']],
-  ['infrastructure', ['infrastructure', 'infra', 'repositories', 'adapters', 'db', 'database', 'data', 'persistence', 'clients']],
+  [
+    'infrastructure',
+    [
+      'infrastructure',
+      'infra',
+      'repositories',
+      'adapters',
+      'db',
+      'database',
+      'data',
+      'persistence',
+      'clients',
+    ],
+  ],
 ];
 
 const FEATURE_ROOT_CANDIDATES = ['features', 'modules', 'domains', 'packages'];
@@ -125,7 +150,10 @@ export function layerOf(file: string, model: LayerModel): string | null {
       // Configured directories may or may not include a `src/` wrapper; both
       // sides are normalised so either form works.
       const directoryParts = meaningfulSegments(directory);
-      if (directoryParts.length > 0 && directoryParts.every((part, index) => parts[index] === part)) {
+      if (
+        directoryParts.length > 0 &&
+        directoryParts.every((part, index) => parts[index] === part)
+      ) {
         return layer;
       }
       // Also match when the layer directory appears as the first segment only.

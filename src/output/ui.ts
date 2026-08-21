@@ -1,5 +1,7 @@
 import { colors, dim, icons, scoreColor } from './theme.js';
 
+// Matching the escape character is the whole point of this pattern.
+// eslint-disable-next-line no-control-regex
 const ANSI = /\u001B\[[0-9;]*m/g;
 
 /**
@@ -35,8 +37,7 @@ export interface BoxOptions {
 
 export function box(lines: string[], options: BoxOptions = {}): string {
   const padding = options.padding ?? 1;
-  const contentWidth =
-    options.width ?? Math.max(...lines.map(visibleWidth), 20) + padding * 2 + 2;
+  const contentWidth = options.width ?? Math.max(...lines.map(visibleWidth), 20) + padding * 2 + 2;
   const paint = options.color ?? dim;
 
   const top = paint(`╭${'─'.repeat(contentWidth)}╮`);

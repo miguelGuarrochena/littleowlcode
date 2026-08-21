@@ -55,7 +55,10 @@ const serverImportInClient: Rule = {
         message:
           `${file.path} is marked "use client" but imports code that only runs on the server. ` +
           'This either fails at build time or silently ships server code to the browser.',
-        detail: [...direct.map((name) => `imports ${name}`), ...viaServerModule.map((name) => `imports ${name} ("use server")`)],
+        detail: [
+          ...direct.map((name) => `imports ${name}`),
+          ...viaServerModule.map((name) => `imports ${name} ("use server")`),
+        ],
         suggestion:
           'Move the server work into a server component or a server action, and pass the result down as props.',
         key: [...direct, ...viaServerModule],

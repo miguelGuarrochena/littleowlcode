@@ -14,6 +14,7 @@ import { architectureCommand, dependenciesCommand, impactCommand } from './comma
 import { initCommand } from './commands/init.js';
 import { baselineCommand } from './commands/baseline.js';
 import { configCommand } from './commands/config.js';
+import { deadCodeCommand, doctorCommand, mapCommand, testsCommand } from './commands/insight.js';
 
 /**
  * The default experience: show what was detected, then offer the handful of
@@ -49,14 +50,22 @@ export async function interactiveCommand(options: GlobalOptions): Promise<number
     const choice = await prompts.select({
       message: 'What would you like to do?',
       options: [
-        { value: 'review', label: '🔍 Review recent changes', hint: 'what did the last change do?' },
+        {
+          value: 'review',
+          label: '🔍 Review recent changes',
+          hint: 'what did the last change do?',
+        },
         { value: 'check', label: '🧭 Check codebase', hint: 'health right now' },
         { value: 'watch', label: '👀 Watch changes', hint: 'keep an eye on it while you work' },
         { value: 'architecture', label: '🏗  Understand architecture' },
         { value: 'impact', label: '📊 See change impact' },
+        { value: 'map', label: '🗺  Map the project', hint: 'new to this codebase?' },
+        { value: 'tests', label: '🧪 Find test gaps' },
+        { value: 'dead-code', label: '🧹 Find dead code' },
         { value: 'dependencies', label: '📦 Inspect dependencies' },
         { value: 'baseline', label: '📌 Update baseline' },
         { value: 'config', label: '⚙  Configure' },
+        { value: 'doctor', label: '🩺 Doctor', hint: 'is Little Owl seeing this project right?' },
         { value: 'exit', label: 'Exit' },
       ],
     });
@@ -83,8 +92,20 @@ export async function interactiveCommand(options: GlobalOptions): Promise<number
       case 'impact':
         await impactCommand(options);
         break;
+      case 'map':
+        await mapCommand(options);
+        break;
+      case 'tests':
+        await testsCommand(options);
+        break;
+      case 'dead-code':
+        await deadCodeCommand(options);
+        break;
       case 'dependencies':
         await dependenciesCommand(options);
+        break;
+      case 'doctor':
+        await doctorCommand(options);
         break;
       case 'baseline':
         await baselineCommand(options);

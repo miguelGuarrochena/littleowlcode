@@ -20,7 +20,8 @@ const largeFile: Rule = {
           `This file is over the ${limit.toLocaleString()}-line budget configured for the project. ` +
           'Large files are the usual place where unrelated responsibilities pile up.',
         detail: [`${file.functions.length} functions, ${file.sloc.toLocaleString()} lines of code`],
-        suggestion: 'Split the file along its clearest seam — usually one exported concept per file.',
+        suggestion:
+          'Split the file along its clearest seam — usually one exported concept per file.',
         baseline: limit,
         current: file.lines,
       });

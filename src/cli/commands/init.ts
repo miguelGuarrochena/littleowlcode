@@ -120,9 +120,7 @@ export async function initCommand(options: InitOptions): Promise<number> {
     const file = writeBaseline(root, buildBaseline(root, result));
     print(`${colors.green(icons.ok)} Wrote ${colors.bold(path.relative(root, file))}`);
     print('');
-    print(
-      dim('Future reviews compare against this baseline until you explicitly update it.'),
-    );
+    print(dim('Future reviews compare against this baseline until you explicitly update it.'));
   }
 
   print('');
@@ -173,14 +171,30 @@ function layersFor(
 
 function topLevelDirectories(root: string): string[] {
   const skip = new Set([
-    'node_modules', '.git', '.github', 'dist', 'build', 'coverage', '.next', '.turbo',
-    'public', 'static', 'assets', '.vscode', '.idea', '.little-owl', 'venv', '.venv',
+    'node_modules',
+    '.git',
+    '.github',
+    'dist',
+    'build',
+    'coverage',
+    '.next',
+    '.turbo',
+    'public',
+    'static',
+    'assets',
+    '.vscode',
+    '.idea',
+    '.little-owl',
+    'venv',
+    '.venv',
   ]);
 
   try {
     return fs
       .readdirSync(root, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.') && !skip.has(entry.name))
+      .filter(
+        (entry) => entry.isDirectory() && !entry.name.startsWith('.') && !skip.has(entry.name),
+      )
       .map((entry) => entry.name)
       .sort();
   } catch {
@@ -188,7 +202,15 @@ function topLevelDirectories(root: string): string[] {
   }
 }
 
-const SUPPORT_DIRECTORIES = new Set(['scripts', 'tests', 'test', 'docs', 'examples', 'e2e', 'tools']);
+const SUPPORT_DIRECTORIES = new Set([
+  'scripts',
+  'tests',
+  'test',
+  'docs',
+  'examples',
+  'e2e',
+  'tools',
+]);
 
 function isProbablySupport(directory: string): boolean {
   return SUPPORT_DIRECTORIES.has(directory);
@@ -257,9 +279,11 @@ function writeConfigFile(root: string, template: ConfigTemplate): string {
   const file = path.join(directory, 'config.ts');
   fs.writeFileSync(file, renderConfigFile(template));
 
+  // The config and the baseline belong in version control; the cache and the
+  // local review log do not.
   const gitignore = path.join(directory, '.gitignore');
   if (!fs.existsSync(gitignore)) {
-    fs.writeFileSync(gitignore, 'cache/\n');
+    fs.writeFileSync(gitignore, 'cache/\nhistory.json\n');
   }
   return file;
 }

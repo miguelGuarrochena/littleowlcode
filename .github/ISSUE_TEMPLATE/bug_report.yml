@@ -1,0 +1,60 @@
+name: Bug report
+description: Little Owl did something wrong, crashed, or reported something that is not true.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The single most useful thing
+        you can include is a small project that reproduces the problem.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you run, what did you expect, and what did you get?
+      placeholder: |
+        I ran `little-owl review` and it reported a circular dependency
+        between a.ts and b.ts, but b.ts only imports a type from a.ts.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How can we reproduce it?
+      description: A minimal project, or the files involved.
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: |
+        Paste the output. `little-owl doctor` is especially useful, and
+        `--json` output helps for anything about findings.
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Little Owl version
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: v20.11.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: languages
+    attributes:
+      label: Languages in the project
+      multiple: true
+      options: [TypeScript, JavaScript, Python, Go, Other]

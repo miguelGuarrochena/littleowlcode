@@ -14,7 +14,8 @@ const GROUPED_ENTRY_RE = /^\s*(?:[\w.]+\s+)?"([^"]+)"/;
 const FUNC_RE = /^func\s+(?:\([^)]*\)\s*)?([A-Za-z_]\w*)\s*\(([^)]*)/;
 const DECISION_RE = /(^|\s)(if|for|case|select|&&|\|\|)(\s|\{|$)/g;
 /** `_ = doThing()` or `value, _ := doThing()` — a return value thrown away. */
-const DISCARDED_RE = /(^|[\s(])_\s*(?:,\s*[\w.]+\s*)?(?::=|=)\s*[\w.]+\(|,\s*_\s*(?::=|=)\s*[\w.]+\(/;
+const DISCARDED_RE =
+  /(^|[\s(])_\s*(?:,\s*[\w.]+\s*)?(?::=|=)\s*[\w.]+\(|,\s*_\s*(?::=|=)\s*[\w.]+\(/;
 
 function collectImports(lines: string[]): ImportRef[] {
   const imports: ImportRef[] = [];

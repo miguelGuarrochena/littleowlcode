@@ -20,7 +20,8 @@ export interface LanguageAdapter {
   parse(input: ParseInput): ParsedFile;
 }
 
-const TEST_PATTERN = /(^|\/)(tests?|__tests__|spec|e2e)\/|\.(test|spec)\.[cm]?[jt]sx?$|(^|\/)test_[^/]+\.py$|_test\.(py|go)$/;
+const TEST_PATTERN =
+  /(^|\/)(tests?|__tests__|spec|e2e)\/|\.(test|spec)\.[cm]?[jt]sx?$|(^|\/)test_[^/]+\.py$|_test\.(py|go)$/;
 
 export function looksLikeTest(file: string): boolean {
   return TEST_PATTERN.test(file);

@@ -1,4 +1,11 @@
-import type { AnalysisResult, Finding, MetricKey, Metrics, ReviewResult } from '../core/types.js';
+import type {
+  AnalysisResult,
+  AnalysisWarning,
+  Finding,
+  MetricKey,
+  Metrics,
+  ReviewResult,
+} from '../core/types.js';
 
 /**
  * Stable JSON contract for `--json`.
@@ -38,6 +45,8 @@ export interface JsonCheckOutput {
   stats: AnalysisResult['stats'];
   counts: { error: number; warning: number; info: number };
   findings: JsonFinding[];
+  /** Files that could not be read or parsed. Never fatal. */
+  warnings: AnalysisWarning[];
   durationMs: number;
 }
 
@@ -103,6 +112,7 @@ export function checkToJson(result: AnalysisResult, version: string): JsonCheckO
     stats: result.stats,
     counts: counts(result.findings),
     findings: result.findings.map(toJsonFinding),
+    warnings: result.warnings,
     durationMs: result.durationMs,
   };
 }

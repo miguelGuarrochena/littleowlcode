@@ -1,0 +1,42 @@
+name: False positive
+description: Little Owl reported something that is actually fine.
+labels: [false-positive]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        False positives matter more than missing findings. A tool that cries
+        wolf stops being read, so these reports are treated as bugs.
+
+  - type: input
+    id: rule
+    attributes:
+      label: Rule id
+      description: Shown in `--json` output as `id`.
+      placeholder: patterns/duplicate-helper
+    validations:
+      required: true
+
+  - type: textarea
+    id: finding
+    attributes:
+      label: What was reported?
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: why-fine
+    attributes:
+      label: Why is the code actually fine?
+      description: |
+        What is the pattern, and why is it deliberate? This is what tells us
+        how to recognise it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: code
+    attributes:
+      label: The code involved
+      render: typescript

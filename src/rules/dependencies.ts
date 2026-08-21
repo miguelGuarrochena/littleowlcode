@@ -104,7 +104,8 @@ const newDependency: Rule = {
         `This change adds ${added.join(', ')}. New dependencies are worth a conscious decision: each ` +
         'one is code you now ship, update and trust.',
       detail: added.map((name) => `${name}@${now[name]}`),
-      suggestion: 'Confirm each addition is needed and that nothing already in the project does the job.',
+      suggestion:
+        'Confirm each addition is needed and that nothing already in the project does the job.',
       key: added,
       current: added,
     });
@@ -134,7 +135,8 @@ const unusedDependency: Rule = {
         `Little Owl found no import of ${unused.join(', ')} anywhere in the analysed source. They may ` +
         'still be loaded through configuration or at runtime, so treat this as a prompt to check, not proof.',
       detail: unused,
-      suggestion: 'Remove the ones that really are unused; they slow installs and widen the attack surface.',
+      suggestion:
+        'Remove the ones that really are unused; they slow installs and widen the attack surface.',
       key: unused,
       current: unused,
     });
@@ -161,7 +163,8 @@ const duplicateDependency: Rule = {
         `${duplicates.join(', ')} appear${duplicates.length === 1 ? 's' : ''} in both dependencies and ` +
         'devDependencies. Which version wins depends on the package manager, so installs can differ between machines.',
       detail: duplicates,
-      suggestion: 'Keep the declaration in one place — dependencies if it ships, devDependencies if it does not.',
+      suggestion:
+        'Keep the declaration in one place — dependencies if it ships, devDependencies if it does not.',
       key: duplicates,
       current: duplicates,
     });

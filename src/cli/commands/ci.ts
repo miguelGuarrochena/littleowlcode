@@ -48,7 +48,13 @@ export async function ciCommand(options: CiOptions): Promise<number> {
   if (options.json) {
     printJson({
       ...reviewToJson(review, readVersion()),
-      ci: { passed: verdict.passed, reasons: verdict.reasons, failOn, maxDrop, newFindingsOnly: newOnly },
+      ci: {
+        passed: verdict.passed,
+        reasons: verdict.reasons,
+        failOn,
+        maxDrop,
+        newFindingsOnly: newOnly,
+      },
     });
     return verdict.exitCode;
   }
@@ -96,7 +102,9 @@ export function evaluateCi(review: ReviewResult, thresholds: CiThresholds): CiVe
     reasons.push(`${counts.error} error-level finding${counts.error === 1 ? '' : 's'}`);
   }
   if (thresholds.failOn === 'warning' && counts.error + counts.warning > 0) {
-    reasons.push(`${counts.error + counts.warning} finding${counts.error + counts.warning === 1 ? '' : 's'} at warning or above`);
+    reasons.push(
+      `${counts.error + counts.warning} finding${counts.error + counts.warning === 1 ? '' : 's'} at warning or above`,
+    );
   }
 
   const drop = review.drift ? -review.drift.overall : 0;

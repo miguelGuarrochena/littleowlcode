@@ -1,0 +1,29 @@
+name: Feature request
+description: Something Little Owl should be able to see.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: |
+        Describe the situation, not the solution. What went wrong in your
+        codebase that Little Owl did not catch?
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What did you have in mind?
+
+  - type: checkboxes
+    id: fit
+    attributes:
+      label: Does it fit the product?
+      description: |
+        Little Owl watches how a codebase evolves. It is not a linter, a
+        formatter, a test runner or a security scanner.
+      options:
+        - label: This is about codebase health, architecture, change impact or drift.
+        - label: This can be answered deterministically, without calling an AI service.

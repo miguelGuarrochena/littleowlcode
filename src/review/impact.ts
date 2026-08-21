@@ -10,6 +10,8 @@ export interface ImpactedFile {
   level: ImpactLevel;
 }
 
+export type RiskLevel = 'high' | 'medium' | 'low';
+
 export interface ImpactReport {
   changed: string[];
   impacted: ImpactedFile[];
@@ -17,6 +19,20 @@ export interface ImpactReport {
   tests: string[];
   /** Route-like entry points among the impacted files. */
   routes: string[];
+  /** External packages the changed files talk to, e.g. `stripe`. */
+  externals: string[];
+  /**
+   * How much of the codebase this change could reach. Derived from how many
+   * files depend on it, how close they are, and whether routes are involved.
+   */
+  risk: RiskLevel;
+  /**
+   * How much to trust the answer. Dynamic imports Little Owl could not resolve
+   * mean the real blast radius may be larger than what is listed here.
+   */
+  confidence: 'high' | 'medium';
+  /** Set when confidence is below `high`, explaining what limits it. */
+  confidenceNote: string | null;
   truncated: boolean;
 }
 
@@ -54,13 +70,51 @@ export function analyzeImpact(context: AnalysisContext, changed: string[]): Impa
     .filter((path) => isRouteLike(path))
     .slice(0, 20);
 
+  const externals = [
+    ...new Set(changed.flatMap((file) => [...(context.graph.external.get(file) ?? [])])),
+  ]
+    .filter((name) => !name.startsWith('node:'))
+    .sort();
+
+  const unresolvedDynamic = changed.some((file) =>
+    context.fileMap
+      .get(file)
+      ?.imports.some(
+        (reference) =>
+          reference.computed === true || (reference.kind === 'dynamic' && !reference.resolved),
+      ),
+  );
+
   return {
     changed: [...changed].sort(),
     impacted: impacted.slice(0, MAX_IMPACTED),
     tests,
     routes,
+    externals,
+    risk: assessRisk(impacted, routes, context.files.length),
+    confidence: unresolvedDynamic ? 'medium' : 'high',
+    confidenceNote: unresolvedDynamic
+      ? 'Some dynamic imports could not be resolved, so more files may be affected than listed.'
+      : null,
     truncated: impacted.length > MAX_IMPACTED,
   };
+}
+
+/**
+ * Risk is about reach, not correctness: a change touching a module a third of
+ * the codebase depends on is risky even if the change itself is trivial.
+ */
+function assessRisk(impacted: ImpactedFile[], routes: string[], totalFiles: number): RiskLevel {
+  if (impacted.length === 0) return 'low';
+
+  const direct = impacted.filter((entry) => entry.level === 'high').length;
+  const share = totalFiles > 0 ? impacted.length / totalFiles : 0;
+
+  // Share is meaningless on a handful of files: one dependent out of three is
+  // 33% of the project and still just one file. Absolute counts gate it.
+  if ((share >= 0.2 && impacted.length >= 5) || direct >= 10 || routes.length >= 4) return 'high';
+  if ((share >= 0.05 && impacted.length >= 2) || direct >= 3 || routes.length >= 1) return 'medium';
+  return 'low';
 }
 
 function levelFor(distance: number): ImpactLevel {

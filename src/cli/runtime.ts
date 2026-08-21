@@ -1,24 +1,9 @@
-import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import * as prompts from '@clack/prompts';
 import { colors } from '../output/theme.js';
+import { readVersion } from '../utils/version.js';
 
-/** Resolves the package version from the shipped package.json. */
-export function readVersion(): string {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  for (const candidate of ['../package.json', '../../package.json']) {
-    const file = path.resolve(here, candidate);
-    if (!fs.existsSync(file)) continue;
-    try {
-      const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as { name?: string; version?: string };
-      if (parsed.name === 'little-owl-code' && parsed.version) return parsed.version;
-    } catch {
-      continue;
-    }
-  }
-  return '0.0.0';
-}
+export { readVersion };
 
 export interface GlobalOptions {
   cwd?: string;

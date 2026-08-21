@@ -2,13 +2,14 @@ import path from 'node:path';
 import chokidar from 'chokidar';
 import { analyzeProject } from '../../core/analyze.js';
 import { ParseCache } from '../../core/cache.js';
+import { SOURCE_EXTENSIONS } from '../../core/scan.js';
 import { loadConfig } from '../../config/load.js';
 import { readBaseline } from '../../baseline/baseline.js';
 import { generatePrompt } from '../../prompts/generate.js';
 import { renderFinding } from '../../output/report.js';
 import { colors, dim, icons } from '../../output/theme.js';
 import { metricLine, rule } from '../../output/ui.js';
-import { toPosix } from '../../utils/paths.js';
+import { basename, toPosix } from '../../utils/paths.js';
 import { compilePattern, matchesCompiled } from '../../utils/glob.js';
 import { print, resolveRoot, type GlobalOptions } from '../runtime.js';
 import type { AnalysisResult, Finding, Metrics } from '../../core/types.js';
@@ -103,6 +104,7 @@ export async function watchCommand(options: WatchOptions): Promise<number> {
   const schedule = (file: string): void => {
     const relative = toPosix(path.relative(root, file));
     if (matchesCompiled(relative, ignored)) return;
+    if (!affectsAnalysis(relative)) return;
     pending.add(relative);
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => void run(), debounceMs);
@@ -122,6 +124,17 @@ export async function watchCommand(options: WatchOptions): Promise<number> {
   });
 
   return 0;
+}
+
+/**
+ * Files that can change the analysis: source files, the manifest, and the
+ * project's own configuration. A README or a log file cannot, and re-running
+ * for those would just burn CPU and scroll the terminal.
+ */
+function affectsAnalysis(relative: string): boolean {
+  if (SOURCE_EXTENSIONS.some((extension) => relative.endsWith(extension))) return true;
+  const name = basename(relative);
+  return name === 'package.json' || name === 'tsconfig.json' || name === 'go.mod';
 }
 
 function printHealthy(result: AnalysisResult, reference: Metrics, hasBaseline: boolean): void {
@@ -189,7 +202,8 @@ function report(
       print(renderFinding(finding, false));
       print('');
     }
-    if (fresh.length > 3) print(dim(`${fresh.length - 3} more — run \`little-owl check --details\`.`));
+    if (fresh.length > 3)
+      print(dim(`${fresh.length - 3} more — run \`little-owl check --details\`.`));
 
     if (options.prompt) {
       print('');
@@ -206,11 +220,19 @@ function promptFor(findings: Finding[]): string {
     {
       status: 'needs-review',
       current: {
-        metrics: { overall: 0, architecture: 0, maintainability: 0, complexity: 0, dependencies: 0, typeSafety: 0 },
+        metrics: {
+          overall: 0,
+          architecture: 0,
+          maintainability: 0,
+          complexity: 0,
+          dependencies: 0,
+          typeSafety: 0,
+        },
         stats: {} as never,
         findings,
         fileMetrics: {},
         project: {} as never,
+        warnings: [],
         durationMs: 0,
       },
       baseline: null,

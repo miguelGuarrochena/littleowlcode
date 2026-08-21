@@ -152,7 +152,10 @@ export function resolvePythonImport(
     let dir = dirOf(fromFile);
     for (let level = 1; level < upLevels; level += 1) dir = dirOf(dir);
     const base = moduleName ? `${dir}/${moduleName}` : `${dir}/__init__`;
-    return firstExisting(moduleName ? pythonCandidates(base) : [`${dir}/__init__.py`], context.files);
+    return firstExisting(
+      moduleName ? pythonCandidates(base) : [`${dir}/__init__.py`],
+      context.files,
+    );
   }
 
   const asPath = specifier.replace(/\./g, '/');
@@ -168,14 +171,12 @@ export function resolvePythonImport(
  * Go imports address packages (directories). We resolve to every non-test file
  * of the target package so the file-level graph still reflects package edges.
  */
-export function resolveGoImport(
-  specifier: string,
-  context: ResolverContext,
-): string[] {
+export function resolveGoImport(specifier: string, context: ResolverContext): string[] {
   if (!context.goModule) return [];
   if (specifier !== context.goModule && !specifier.startsWith(`${context.goModule}/`)) return [];
 
-  const relative = specifier === context.goModule ? '' : specifier.slice(context.goModule.length + 1);
+  const relative =
+    specifier === context.goModule ? '' : specifier.slice(context.goModule.length + 1);
   const targets: string[] = [];
 
   for (const file of context.files) {
@@ -199,9 +200,10 @@ export function createResolverContext(
   return {
     root,
     files: new Set(files),
-    aliases: languages.includes('typescript') || languages.includes('javascript')
-      ? readTsAliases(root)
-      : [],
+    aliases:
+      languages.includes('typescript') || languages.includes('javascript')
+        ? readTsAliases(root)
+        : [],
     goModule: readGoModule(root),
     sourceRoots,
   };

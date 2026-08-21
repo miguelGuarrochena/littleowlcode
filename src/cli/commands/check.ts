@@ -55,12 +55,21 @@ export async function checkCommand(options: CheckOptions): Promise<number> {
   if (errors === 0) {
     print(renderOwlLine('Looking good. Nothing critical in this codebase.', 'good'));
   } else {
-    print(renderOwlLine(`I spotted ${errors} thing${errors === 1 ? '' : 's'} worth your attention.`, 'bad'));
+    print(
+      renderOwlLine(
+        `I spotted ${errors} thing${errors === 1 ? '' : 's'} worth your attention.`,
+        'bad',
+      ),
+    );
   }
 
   if (config.sourcePath === null) {
     print('');
-    print(dim(`No configuration found. ${colors.bold('little-owl init')} sets up layers and thresholds.`));
+    print(
+      dim(
+        `No configuration found. ${colors.bold('little-owl init')} sets up layers and thresholds.`,
+      ),
+    );
   }
 
   return 0;

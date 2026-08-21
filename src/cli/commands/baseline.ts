@@ -81,12 +81,48 @@ export async function baselineCommand(options: BaselineOptions): Promise<number>
   print('');
   print(colors.bold('Current project health'));
   print('');
-  print(metricLine({ label: 'Overall', value: result.metrics.overall, ...(existing ? { previous: existing.metrics.overall } : {}) }));
-  print(metricLine({ label: 'Architecture', value: result.metrics.architecture, ...(existing ? { previous: existing.metrics.architecture } : {}) }));
-  print(metricLine({ label: 'Maintainability', value: result.metrics.maintainability, ...(existing ? { previous: existing.metrics.maintainability } : {}) }));
-  print(metricLine({ label: 'Complexity', value: result.metrics.complexity, ...(existing ? { previous: existing.metrics.complexity } : {}) }));
-  print(metricLine({ label: 'Dependencies', value: result.metrics.dependencies, ...(existing ? { previous: existing.metrics.dependencies } : {}) }));
-  print(metricLine({ label: 'Type Safety', value: result.metrics.typeSafety, ...(existing ? { previous: existing.metrics.typeSafety } : {}) }));
+  print(
+    metricLine({
+      label: 'Overall',
+      value: result.metrics.overall,
+      ...(existing ? { previous: existing.metrics.overall } : {}),
+    }),
+  );
+  print(
+    metricLine({
+      label: 'Architecture',
+      value: result.metrics.architecture,
+      ...(existing ? { previous: existing.metrics.architecture } : {}),
+    }),
+  );
+  print(
+    metricLine({
+      label: 'Maintainability',
+      value: result.metrics.maintainability,
+      ...(existing ? { previous: existing.metrics.maintainability } : {}),
+    }),
+  );
+  print(
+    metricLine({
+      label: 'Complexity',
+      value: result.metrics.complexity,
+      ...(existing ? { previous: existing.metrics.complexity } : {}),
+    }),
+  );
+  print(
+    metricLine({
+      label: 'Dependencies',
+      value: result.metrics.dependencies,
+      ...(existing ? { previous: existing.metrics.dependencies } : {}),
+    }),
+  );
+  print(
+    metricLine({
+      label: 'Type Safety',
+      value: result.metrics.typeSafety,
+      ...(existing ? { previous: existing.metrics.typeSafety } : {}),
+    }),
+  );
   print('');
 
   if (existing) {
@@ -134,7 +170,9 @@ export async function baselineCommand(options: BaselineOptions): Promise<number>
     note: 'baseline updated',
   });
 
-  print(`${colors.green(icons.ok)} Baseline saved to ${colors.bold(path.relative(root, baselinePath(root)))}`);
+  print(
+    `${colors.green(icons.ok)} Baseline saved to ${colors.bold(path.relative(root, baselinePath(root)))}`,
+  );
   return 0;
 }
 

@@ -1,0 +1,43 @@
+# Little Owl Code on every pull request.
+#
+# Copy this file to .github/workflows/little-owl.yml in your project.
+#
+# Commit .little-owl/baseline.json so CI compares against the state your team
+# agreed on, rather than against whatever the pull request happens to contain.
+
+name: Little Owl Code
+
+on:
+  pull_request:
+
+jobs:
+  little-owl:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the base branch is available for comparison.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      # Fails only on error-level findings that this pull request introduced.
+      # Existing debt does not block the build.
+      - name: Review the change
+        run: npx little-owl-code ci --base origin/${{ github.base_ref }}
+
+      # Optional: attach the full report to the run for later inspection.
+      - name: Save the report
+        if: always()
+        run: npx little-owl-code ci --json --base origin/${{ github.base_ref }} > little-owl.json || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: little-owl-report
+          path: little-owl.json

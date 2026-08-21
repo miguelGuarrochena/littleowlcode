@@ -1,12 +1,22 @@
 import type {
   AnalysisResult,
+  ChangeSet,
   Finding,
   Metrics,
   ProjectInfo,
   ReviewResult,
 } from '../core/types.js';
 import type { AnalysisContext } from '../core/context.js';
-import { colors, dim, icons, severityColor, severityIcon, statusColor, statusIcon, statusText } from './theme.js';
+import {
+  colors,
+  dim,
+  icons,
+  severityColor,
+  severityIcon,
+  statusColor,
+  statusIcon,
+  statusText,
+} from './theme.js';
 import { box, countLabel, heading, indent, metricLine, rule, scoreBar, wrap } from './ui.js';
 import { describeStack } from '../detect/project.js';
 import { describeLayerChain, layerOf } from '../architecture/layers.js';
@@ -75,11 +85,17 @@ export function renderReview(review: ReviewResult, options: RenderOptions = {}):
   const sections: string[] = [heading(`${icons.owl} CODEBASE REVIEW`), ''];
 
   if (changes) {
-    const changedCount = changes.files.length;
+    const size = changeSize(changes);
     sections.push(
-      `${colors.bold(countLabel(changedCount, 'file'))} changed ${dim(`(${changes.description})`)}`,
-      '',
+      `${colors.bold(countLabel(size.files, 'file'))} changed ${dim(`(${changes.description})`)}`,
     );
+    if (size.insertions > 0 || size.deletions > 0) {
+      sections.push(
+        `${colors.green(`+${size.insertions.toLocaleString()}`)} ${colors.red(`-${size.deletions.toLocaleString()}`)} ${dim('lines')}` +
+          (size.areas > 1 ? dim(`   across ${countLabel(size.areas, 'area')}`) : ''),
+      );
+    }
+    sections.push('');
   }
 
   sections.push(
@@ -120,7 +136,9 @@ export function renderReview(review: ReviewResult, options: RenderOptions = {}):
 
   if (review.resolvedFindings.length > 0) {
     sections.push(
-      colors.green(`${icons.ok} ${countLabel(review.resolvedFindings.length, 'earlier finding')} resolved`),
+      colors.green(
+        `${icons.ok} ${countLabel(review.resolvedFindings.length, 'earlier finding')} resolved`,
+      ),
     );
   }
 
@@ -130,9 +148,47 @@ export function renderReview(review: ReviewResult, options: RenderOptions = {}):
 
   const findings = renderFindings(shown, options);
   if (findings) sections.push('', findings);
-  else sections.push('', colors.green(`${icons.owl} Looking good. This change did not introduce new findings.`));
+  else
+    sections.push(
+      '',
+      colors.green(`${icons.owl} Looking good. This change did not introduce new findings.`),
+    );
 
   return sections.join('\n');
+}
+
+export interface ChangeSize {
+  files: number;
+  insertions: number;
+  deletions: number;
+  /** Distinct top-level directories touched. */
+  areas: number;
+  magnitude: 'small' | 'medium' | 'large';
+}
+
+/**
+ * How big the change is, separate from whether it is good. A large change is
+ * not wrong, but it is worth knowing before reading four findings and assuming
+ * you have seen everything.
+ */
+export function changeSize(changes: ChangeSet): ChangeSize {
+  const insertions = changes.files.reduce((sum, file) => sum + file.insertions, 0);
+  const deletions = changes.files.reduce((sum, file) => sum + file.deletions, 0);
+  const areas = new Set(
+    changes.files.map((file) =>
+      file.path.includes('/') ? file.path.slice(0, file.path.indexOf('/')) : '.',
+    ),
+  ).size;
+
+  const touched = insertions + deletions;
+  const magnitude =
+    changes.files.length > 30 || touched > 1500
+      ? 'large'
+      : changes.files.length > 10 || touched > 400
+        ? 'medium'
+        : 'small';
+
+  return { files: changes.files.length, insertions, deletions, areas, magnitude };
 }
 
 function renderScope(patterns: string[], outOfScope: string[]): string {
@@ -142,7 +198,9 @@ function renderScope(patterns: string[], outOfScope: string[]): string {
     '',
     `  ${dim('expected:')} ${patterns.join(', ')}`,
     `  ${dim('also changed:')}`,
-    ...groups.map((group) => `    ${group.area}/ ${dim(`(${countLabel(group.files.length, 'file')})`)}`),
+    ...groups.map(
+      (group) => `    ${group.area}/ ${dim(`(${countLabel(group.files.length, 'file')})`)}`,
+    ),
   ];
   return lines.join('\n');
 }
@@ -168,9 +226,7 @@ export function renderFindings(findings: Finding[], options: RenderOptions = {})
 
 export function renderFinding(finding: Finding, verbose: boolean): string {
   const paint = severityColor(finding.severity);
-  const location = finding.file
-    ? `${finding.file}${finding.line ? `:${finding.line}` : ''}`
-    : '';
+  const location = finding.file ? `${finding.file}${finding.line ? `:${finding.line}` : ''}` : '';
 
   const lines = [
     `${severityIcon[finding.severity]} ${paint(finding.category)}  ${colors.bold(finding.title)}`,
@@ -210,11 +266,15 @@ function renderCounts(
   total: number,
 ): string {
   const parts: string[] = [];
-  if (counts.error > 0) parts.push(colors.red(`${severityIcon.error} ${countLabel(counts.error, 'critical', 'critical')}`));
+  if (counts.error > 0)
+    parts.push(
+      colors.red(`${severityIcon.error} ${countLabel(counts.error, 'critical', 'critical')}`),
+    );
   if (counts.warning > 0) {
     parts.push(colors.yellow(`${severityIcon.warning} ${countLabel(counts.warning, 'warning')}`));
   }
-  if (counts.info > 0) parts.push(colors.blue(`${severityIcon.info} ${countLabel(counts.info, 'note')}`));
+  if (counts.info > 0)
+    parts.push(colors.blue(`${severityIcon.info} ${countLabel(counts.info, 'note')}`));
   if (parts.length === 0) {
     parts.push(colors.green(`${icons.ok} nothing flagged`));
   }
@@ -258,7 +318,12 @@ export function renderArchitecture(context: AnalysisContext): string {
     fileCounts.set(layer, (fileCounts.get(layer) ?? 0) + 1);
   }
 
-  sections.push('', dim(`Policy: ${layers.policy === 'adjacent' ? 'a layer may only use the layer directly below it' : 'a layer may use any layer below it'}`));
+  sections.push(
+    '',
+    dim(
+      `Policy: ${layers.policy === 'adjacent' ? 'a layer may only use the layer directly below it' : 'a layer may use any layer below it'}`,
+    ),
+  );
   sections.push(dim(`Chain:  ${describeLayerChain(layers)}`));
   sections.push('');
 
@@ -270,7 +335,10 @@ export function renderArchitecture(context: AnalysisContext): string {
     sections.push(...violations.map((line) => `  ${line}`));
   }
 
-  sections.push('', dim(`${graph.edges.length} internal imports across ${graph.nodes().length} files`));
+  sections.push(
+    '',
+    dim(`${graph.edges.length} internal imports across ${graph.nodes().length} files`),
+  );
   return sections.join('\n');
 }
 
@@ -295,7 +363,10 @@ function architectureSummary(context: AnalysisContext): string[] {
 
   return [...pairs.entries()]
     .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([pair, count]) => `${colors.red(icons.error)} ${pair}  ${dim(`(${countLabel(count, 'import')})`)}`);
+    .map(
+      ([pair, count]) =>
+        `${colors.red(icons.error)} ${pair}  ${dim(`(${countLabel(count, 'import')})`)}`,
+    );
 }
 
 export function renderImpact(report: ImpactReport): string {
@@ -321,18 +392,28 @@ export function renderImpact(report: ImpactReport): string {
     const entries = report.impacted.filter((entry) => entry.level === level);
     if (entries.length === 0) continue;
     const paint = level === 'high' ? colors.red : level === 'medium' ? colors.yellow : dim;
-    sections.push(paint(`  ${level.toUpperCase()}  ${dim(`(${countLabel(entries.length, 'file')})`)}`));
+    sections.push(
+      paint(`  ${level.toUpperCase()}  ${dim(`(${countLabel(entries.length, 'file')})`)}`),
+    );
     sections.push(...entries.slice(0, 8).map((entry) => `    ${entry.path}`));
     if (entries.length > 8) sections.push(dim(`    ... and ${entries.length - 8} more`));
     sections.push('');
   }
 
   if (report.routes.length > 0) {
-    sections.push(colors.bold('Routes'), ...report.routes.map((file) => `  ${routeLabel(file)} ${dim(file)}`), '');
+    sections.push(
+      colors.bold('Routes'),
+      ...report.routes.map((file) => `  ${routeLabel(file)} ${dim(file)}`),
+      '',
+    );
   }
 
   if (report.tests.length > 0) {
-    sections.push(colors.bold('Tests that reach this change'), ...report.tests.slice(0, 10).map((file) => `  ${file}`), '');
+    sections.push(
+      colors.bold('Tests that reach this change'),
+      ...report.tests.slice(0, 10).map((file) => `  ${file}`),
+      '',
+    );
   }
 
   sections.push(
@@ -369,7 +450,10 @@ export function renderDependencies(context: AnalysisContext): string {
   }
 
   if (unused.length > 0) {
-    lines.push(dim(`${icons.info} Declared but never imported (may be used via config or at runtime)`), '');
+    lines.push(
+      dim(`${icons.info} Declared but never imported (may be used via config or at runtime)`),
+      '',
+    );
     lines.push(...unused.slice(0, 15).map((name) => dim(`  ${name}`)), '');
   }
 
@@ -387,9 +471,34 @@ export function renderDependencies(context: AnalysisContext): string {
 }
 
 const NODE_BUILTINS = new Set([
-  'fs', 'path', 'os', 'url', 'util', 'events', 'stream', 'crypto', 'http', 'https', 'child_process',
-  'assert', 'buffer', 'zlib', 'net', 'tls', 'dns', 'readline', 'worker_threads', 'perf_hooks',
-  'string_decoder', 'querystring', 'timers', 'tty', 'v8', 'vm', 'process', 'module',
+  'fs',
+  'path',
+  'os',
+  'url',
+  'util',
+  'events',
+  'stream',
+  'crypto',
+  'http',
+  'https',
+  'child_process',
+  'assert',
+  'buffer',
+  'zlib',
+  'net',
+  'tls',
+  'dns',
+  'readline',
+  'worker_threads',
+  'perf_hooks',
+  'string_decoder',
+  'querystring',
+  'timers',
+  'tty',
+  'v8',
+  'vm',
+  'process',
+  'module',
 ]);
 
 function isBuiltin(name: string): boolean {

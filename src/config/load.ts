@@ -6,6 +6,11 @@ import { baseConfig, ruleSeveritiesFor, THRESHOLD_PRESETS } from './defaults.js'
 
 export const CONFIG_DIR = '.little-owl';
 
+/**
+ * Config locations, in priority order. The `.little-owl/` directory is what
+ * `init` writes; the root-level forms exist because that is where people look
+ * first when they add configuration by hand.
+ */
 const CANDIDATES = [
   '.little-owl/config.ts',
   '.little-owl/config.mts',
@@ -13,8 +18,15 @@ const CANDIDATES = [
   '.little-owl/config.mjs',
   '.little-owl/config.json',
   'little-owl.config.ts',
+  'little-owl.config.mts',
   'little-owl.config.js',
   'little-owl.config.mjs',
+  'little-owl.config.json',
+  '.littleowlrc.ts',
+  '.littleowlrc.js',
+  '.littleowlrc.mjs',
+  '.littleowlrc.json',
+  '.littleowlrc',
 ];
 
 export function findConfigFile(root: string): string | null {
@@ -42,8 +54,14 @@ export async function loadConfig(root: string): Promise<ResolvedConfig> {
 }
 
 async function readConfigFile(file: string): Promise<LittleOwlConfig> {
-  if (file.endsWith('.json')) {
-    return JSON.parse(fs.readFileSync(file, 'utf8')) as LittleOwlConfig;
+  // A bare `.littleowlrc` is JSON, matching how every other rc file behaves.
+  if (file.endsWith('.json') || file.endsWith('.littleowlrc')) {
+    try {
+      return JSON.parse(fs.readFileSync(file, 'utf8')) as LittleOwlConfig;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`Could not parse ${file} as JSON: ${reason}`);
+    }
   }
 
   const jiti = createJiti(import.meta.url, { interopDefault: true });

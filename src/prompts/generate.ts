@@ -25,9 +25,7 @@ export function generatePrompt(review: ReviewResult, options: PromptOptions = {}
       ? review.newFindings
       : review.current.findings;
 
-  const ranked = pool
-    .filter((finding) => finding.severity !== 'info')
-    .slice(0, maxInstructions);
+  const ranked = pool.filter((finding) => finding.severity !== 'info').slice(0, maxInstructions);
 
   const instructions = ranked.map(instructionFor);
   const scope = options.scope ?? review.scope?.patterns ?? [];

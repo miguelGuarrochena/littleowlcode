@@ -84,7 +84,12 @@ const globalState: Rule = {
         message:
           `${file.path} rebinds module-level state from inside functions. Shared mutable state makes ` +
           'behaviour depend on call order and breaks under concurrency.',
-        detail: [`lines: ${markers.slice(0, 8).map((marker) => marker.line).join(', ')}`],
+        detail: [
+          `lines: ${markers
+            .slice(0, 8)
+            .map((marker) => marker.line)
+            .join(', ')}`,
+        ],
         suggestion: 'Pass the value in and return the new one, or hold the state in a class.',
         current: markers.length,
       });
@@ -115,7 +120,9 @@ const ignoredError: Rule = {
         message:
           `${file.path} throws away a call's return value with \`_\` ${markers.length} time${markers.length === 1 ? '' : 's'}. ` +
           'In Go that is usually an error being dropped.',
-        detail: markers.slice(0, 5).map((marker) => `line ${marker.line}: ${marker.text ?? ''}`.trim()),
+        detail: markers
+          .slice(0, 5)
+          .map((marker) => `line ${marker.line}: ${marker.text ?? ''}`.trim()),
         suggestion: 'Handle the error, or add a short comment explaining why ignoring it is safe.',
         current: markers.length,
       });
@@ -145,7 +152,9 @@ const largePackage: Rule = {
     const limit = context.config.thresholds.maxFileLines * 5;
     const findings: Finding[] = [];
 
-    for (const [directory, entry] of [...byDirectory.entries()].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    for (const [directory, entry] of [...byDirectory.entries()].sort(([a], [b]) =>
+      a < b ? -1 : 1,
+    )) {
       if (entry.lines <= limit) continue;
 
       const finding = createFinding(this, context, {

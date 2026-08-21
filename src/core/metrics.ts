@@ -125,7 +125,9 @@ export function computeMetrics(stats: MetricStats, hasTypeScript: boolean): Metr
   const architecture = clampScore(100 - architecturePenalty);
 
   const complexity = clampScore(
-    100 - ratio(stats.complexFunctions, stats.functions) * 180 - ratio(stats.deeplyNested, stats.functions) * 60,
+    100 -
+      ratio(stats.complexFunctions, stats.functions) * 180 -
+      ratio(stats.deeplyNested, stats.functions) * 60,
   );
 
   const maintainability = clampScore(
@@ -136,9 +138,7 @@ export function computeMetrics(stats: MetricStats, hasTypeScript: boolean): Metr
   );
 
   const dependencies = clampScore(
-    100 -
-      (stats.unresolvedImports / per100Files) * 3 -
-      Math.max(0, stats.maxImportDepth - 8) * 2,
+    100 - (stats.unresolvedImports / per100Files) * 3 - Math.max(0, stats.maxImportDepth - 8) * 2,
   );
 
   const kloc = Math.max(1, stats.linesOfCode / 1000);

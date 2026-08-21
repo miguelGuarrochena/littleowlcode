@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ParsedFile } from './types.js';
+import { readVersion } from '../utils/version.js';
 
 /**
  * Parse cache keyed by file path and validated with mtime + size.
@@ -19,6 +20,11 @@ interface CacheEntry {
 
 interface CacheFile {
   version: number;
+  /**
+   * The Little Owl version that produced these entries. A different version may
+   * parse or measure differently, so its results are not reusable.
+   */
+  tool: string;
   entries: Record<string, CacheEntry>;
 }
 
@@ -39,7 +45,7 @@ export class ParseCache {
     if (!this.file || !fs.existsSync(this.file)) return;
     try {
       const data = JSON.parse(fs.readFileSync(this.file, 'utf8')) as CacheFile;
-      if (data.version !== CACHE_VERSION) return;
+      if (data.version !== CACHE_VERSION || data.tool !== readVersion()) return;
       this.entries = new Map(Object.entries(data.entries));
     } catch {
       this.entries = new Map();
@@ -70,6 +76,7 @@ export class ParseCache {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
       const data: CacheFile = {
         version: CACHE_VERSION,
+        tool: readVersion(),
         entries: Object.fromEntries(this.entries),
       };
       fs.writeFileSync(this.file, JSON.stringify(data));

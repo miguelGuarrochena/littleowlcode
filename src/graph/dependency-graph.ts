@@ -117,6 +117,10 @@ export function buildDependencyGraph(
 
   for (const file of files) {
     for (const reference of file.imports) {
+      // A runtime-built specifier resolves to nothing knowable. It is kept on
+      // the file so callers can lower their confidence, but it is not an edge.
+      if (reference.computed) continue;
+
       if (file.language === 'go') {
         const targets = resolveGoImport(reference.raw, context);
         if (targets.length === 0) {

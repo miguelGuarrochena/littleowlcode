@@ -71,8 +71,11 @@ function parseNameStatus(output: string): ChangedFile[] {
     }
     const filePath = parts[1];
     if (!filePath) continue;
-    const status: ChangedFile['status'] =
-      code.startsWith('A') ? 'added' : code.startsWith('D') ? 'deleted' : 'modified';
+    const status: ChangedFile['status'] = code.startsWith('A')
+      ? 'added'
+      : code.startsWith('D')
+        ? 'deleted'
+        : 'modified';
     files.push({ path: filePath, status, insertions: 0, deletions: 0 });
   }
   return files;
@@ -167,9 +170,13 @@ export function detectChanges(root: string, query: ChangeQuery = {}): ChangeSet 
   return { description: 'no changes detected', files: [] };
 }
 
+/** Little Owl's own files are not part of the change being reviewed. */
+const SELF_MANAGED = /^\.little-owl\//;
+
 function dedupe(files: ChangedFile[]): ChangedFile[] {
   const byPath = new Map<string, ChangedFile>();
   for (const file of files) {
+    if (SELF_MANAGED.test(file.path)) continue;
     const existing = byPath.get(file.path);
     if (!existing) {
       byPath.set(file.path, file);
@@ -184,4 +191,116 @@ function dedupe(files: ChangedFile[]): ChangedFile[] {
 /** Reads a file as it exists at a given ref, or `null` when absent there. */
 export function readFileAtRef(root: string, ref: string, file: string): string | null {
   return git(root, ['show', `${ref}:${file}`]);
+}
+
+export interface Commit {
+  hash: string;
+  shortHash: string;
+  date: string;
+  author: string;
+  subject: string;
+  body: string;
+}
+
+/**
+ * Separators chosen so they cannot appear in a commit message. Parsing git
+ * output on newlines alone breaks the moment someone writes a multi-line body.
+ */
+const FIELD = '\u001F';
+const RECORD = '\u001E';
+const LOG_FORMAT = `--pretty=format:%H${FIELD}%h${FIELD}%aI${FIELD}%an${FIELD}%s${FIELD}%b${RECORD}`;
+
+function parseLog(output: string | null): Commit[] {
+  if (!output) return [];
+  const commits: Commit[] = [];
+
+  for (const record of output.split(RECORD)) {
+    const trimmed = record.trim();
+    if (!trimmed) continue;
+    const [hash, shortHash, date, author, subject, body] = trimmed.split(FIELD);
+    if (!hash || !shortHash) continue;
+    commits.push({
+      hash,
+      shortHash,
+      date: date ?? '',
+      author: author ?? '',
+      subject: subject ?? '',
+      body: (body ?? '').trim(),
+    });
+  }
+
+  return commits;
+}
+
+/**
+ * Commits that touched a file, newest first.
+ *
+ * `--follow` keeps the history across renames, which matters when asking why a
+ * file exists: a rename would otherwise hide its whole origin story.
+ */
+export function fileHistory(root: string, file: string, limit = 50): Commit[] {
+  return parseLog(git(root, ['log', '--follow', `-n${limit}`, LOG_FORMAT, '--', file]));
+}
+
+/** The commit that introduced a file, or `null` when git has no record of it. */
+export function fileCreation(root: string, file: string): Commit | null {
+  const history = parseLog(
+    git(root, ['log', '--follow', '--diff-filter=A', '-n1', LOG_FORMAT, '--', file]),
+  );
+  return history[0] ?? null;
+}
+
+/** How many commits touched a file — a rough proxy for how much it churns. */
+export function commitCount(root: string, file: string): number {
+  const output = git(root, ['rev-list', '--count', 'HEAD', '--', file]);
+  return output ? Number.parseInt(output, 10) || 0 : 0;
+}
+
+/** Distinct authors who touched a file, most frequent first. */
+export function fileAuthors(root: string, file: string): Array<{ name: string; commits: number }> {
+  const output = git(root, ['shortlog', '-sn', '--no-merges', 'HEAD', '--', file]);
+  if (!output) return [];
+
+  return output
+    .split('\n')
+    .map((line) => /^\s*(\d+)\s+(.*)$/.exec(line.trim()))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map((match) => ({ name: match[2]!, commits: Number.parseInt(match[1]!, 10) || 0 }));
+}
+
+/**
+ * Files that changed together with `file` most often.
+ *
+ * Repeated co-change is evidence of coupling that the import graph cannot see —
+ * two files that always move together are related whether or not they import
+ * each other.
+ */
+export function coChangedFiles(
+  root: string,
+  file: string,
+  limit = 30,
+): Array<{ path: string; times: number }> {
+  const output = git(root, [
+    'log',
+    `-n${limit}`,
+    '--format=%H',
+    '--name-only',
+    '--no-merges',
+    '--',
+    file,
+  ]);
+  if (!output) return [];
+
+  const counts = new Map<string, number>();
+  for (const line of output.split('\n')) {
+    const path = line.trim();
+    if (!path || path === file) continue;
+    // Commit hashes are 40 hex characters and never contain a dot or slash.
+    if (/^[0-9a-f]{40}$/.test(path)) continue;
+    counts.set(path, (counts.get(path) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .map(([path, times]) => ({ path, times }))
+    .sort((a, b) => b.times - a.times || (a.path < b.path ? -1 : 1));
 }

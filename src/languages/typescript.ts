@@ -180,12 +180,14 @@ function collectImports(source: ts.SourceFile): ImportRef[] {
     kind: ImportRef['kind'],
     node: ts.Node,
     typeOnly: boolean,
+    computed = false,
   ): void => {
     imports.push({
       raw: specifier,
       kind,
       typeOnly,
       line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+      ...(computed ? { computed: true } : {}),
     });
   };
 
@@ -209,8 +211,16 @@ function collectImports(source: ts.SourceFile): ImportRef[] {
       const first = node.arguments[0];
       const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
       const isDynamic = node.expression.kind === ts.SyntaxKind.ImportKeyword;
-      if ((isRequire || isDynamic) && first && ts.isStringLiteral(first)) {
-        push(first.text, isDynamic ? 'dynamic' : 'require', node, false);
+
+      if ((isRequire || isDynamic) && first) {
+        if (ts.isStringLiteral(first)) {
+          push(first.text, isDynamic ? 'dynamic' : 'require', node, false);
+        } else if (isDynamic) {
+          // A specifier built at runtime could point anywhere. Recording it
+          // is what stops dead-code and impact from sounding more certain
+          // than they are.
+          push(first.getText(), 'dynamic', node, false, true);
+        }
       }
     }
     node.forEachChild(visit);
@@ -268,10 +278,14 @@ function collectMarkers(source: ts.SourceFile, content: string, isTs: boolean): 
       if (node.kind === ts.SyntaxKind.AnyKeyword) {
         markers.push({ kind: 'any', line: lineOf(node.getStart(source)) });
       } else if (ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)) {
-        // `as Foo` is normal TypeScript. Only the escape hatches are flagged.
-        const typeText = node.type.getText();
+        // `as Foo` is normal TypeScript. Only the escape hatches are flagged,
+        // and `x as unknown as Y` counts once, at the outer assertion.
+        const isInnerOfChain = node.parent !== undefined && ts.isAsExpression(node.parent);
+        const typeText = isInnerOfChain ? 'skip' : node.type.getText();
         const isUnsafe =
-          typeText === 'any' || typeText === 'unknown' || /\bas\s+unknown\s+as\b/.test(node.getText());
+          typeText === 'any' ||
+          typeText === 'unknown' ||
+          /\bas\s+unknown\s+as\b/.test(node.getText());
         if (isUnsafe) {
           markers.push({
             kind: 'unsafe-assertion',
@@ -285,18 +299,56 @@ function collectMarkers(source: ts.SourceFile, content: string, isTs: boolean): 
     source.forEachChild(visit);
   }
 
-  content.split('\n').forEach((line, index) => {
-    if (line.includes('@ts-ignore')) {
-      markers.push({ kind: 'ts-ignore', line: index + 1, text: line.trim() });
-    } else if (line.includes('@ts-expect-error')) {
-      markers.push({ kind: 'ts-expect-error', line: index + 1, text: line.trim() });
-    }
-    if (/eslint-disable(-next-line)?\s/.test(line)) {
-      markers.push({ kind: 'eslint-disable', line: index + 1, text: line.trim() });
-    }
-  });
+  for (const comment of comments(source, content)) {
+    // TypeScript and ESLint only honour a directive at the start of a comment,
+    // so prose that merely mentions `@ts-ignore` is correctly left alone.
+    const directive =
+      /^\/[/*]+\s*@?(ts-ignore|ts-expect-error|eslint-disable(?:-next-line)?)\b/.exec(comment.text);
+    if (!directive) continue;
+
+    const kind = directive[1]!.startsWith('eslint-disable')
+      ? 'eslint-disable'
+      : (directive[1] as 'ts-ignore' | 'ts-expect-error');
+
+    markers.push({ kind, line: lineOf(comment.position), text: comment.text.trim() });
+  }
 
   return markers;
+}
+
+interface CommentRange {
+  text: string;
+  position: number;
+}
+
+/**
+ * Every comment in the file, found with the TypeScript lexer.
+ *
+ * Scanning raw lines would also match `'@ts-ignore'` written inside a string —
+ * which is exactly what happens in code that talks *about* suppressions, this
+ * file included.
+ */
+function comments(source: ts.SourceFile, content: string): CommentRange[] {
+  const found: CommentRange[] = [];
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    /* skipTrivia */ false,
+    source.languageVariant,
+    content,
+  );
+
+  let token = scanner.scan();
+  while (token !== ts.SyntaxKind.EndOfFileToken) {
+    if (
+      token === ts.SyntaxKind.SingleLineCommentTrivia ||
+      token === ts.SyntaxKind.MultiLineCommentTrivia
+    ) {
+      found.push({ text: scanner.getTokenText(), position: scanner.getTokenStart() });
+    }
+    token = scanner.scan();
+  }
+
+  return found;
 }
 
 /**

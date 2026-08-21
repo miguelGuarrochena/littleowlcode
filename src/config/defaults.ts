@@ -98,6 +98,11 @@ export const DEFAULT_RULE_SEVERITIES: Record<string, Severity> = {
   'go/ignored-error': 'warning',
   'go/large-package': 'info',
 
+  'patterns/duplicate-helper': 'warning',
+  'patterns/parallel-implementations': 'warning',
+  'patterns/thin-wrapper': 'info',
+  'patterns/abstraction-growth': 'info',
+
   'dependencies/major-version-change': 'warning',
   'dependencies/new-dependency': 'info',
   'dependencies/unused-dependency': 'info',
@@ -115,6 +120,9 @@ const STRICTNESS_OVERRIDES: Record<Strictness, Record<string, Severity>> = {
     'type-safety/unsafe-assertion': 'off',
     'type-safety/js-in-ts-project': 'off',
     'architecture/deep-import-chain': 'off',
+    'patterns/thin-wrapper': 'off',
+    'patterns/abstraction-growth': 'off',
+    'patterns/parallel-implementations': 'info',
     'dependencies/new-dependency': 'off',
     'dependencies/unused-dependency': 'off',
   },
@@ -128,6 +136,8 @@ const STRICTNESS_OVERRIDES: Record<Strictness, Record<string, Severity>> = {
     'type-safety/unsafe-assertion': 'warning',
     'type-safety/js-in-ts-project': 'warning',
     'react/effect-dependency-risk': 'warning',
+    'patterns/thin-wrapper': 'warning',
+    'patterns/abstraction-growth': 'warning',
     'dependencies/new-dependency': 'warning',
   },
 };

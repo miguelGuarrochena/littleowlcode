@@ -173,7 +173,8 @@ const forbiddenDependency: Rule = {
           line: edge.line,
           title: 'Forbidden dependency',
           message: `${edge.from} imports ${edge.to}, which your configuration forbids (${rule.source}).`,
-          suggestion: 'Remove the import, or relax the rule in .little-owl/config.ts if it no longer applies.',
+          suggestion:
+            'Remove the import, or relax the rule in .little-owl/config.ts if it no longer applies.',
           key: [edge.to, rule.source],
           current: rule.source,
         });

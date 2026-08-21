@@ -4,6 +4,10 @@ import type { Language, ProjectInfo } from '../core/types.js';
 
 interface PackageJson {
   name?: string;
+  main?: string;
+  module?: string;
+  bin?: string | Record<string, string>;
+  exports?: unknown;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   workspaces?: string[] | { packages?: string[] };
@@ -21,7 +25,10 @@ export function readPackageJson(root: string): PackageJson | null {
   }
 }
 
-function detectPackageManager(root: string, pkg: PackageJson | null): ProjectInfo['packageManager'] {
+function detectPackageManager(
+  root: string,
+  pkg: PackageJson | null,
+): ProjectInfo['packageManager'] {
   if (pkg?.packageManager?.startsWith('pnpm')) return 'pnpm';
   if (pkg?.packageManager?.startsWith('yarn')) return 'yarn';
   if (pkg?.packageManager?.startsWith('bun')) return 'bun';
@@ -70,7 +77,8 @@ function detectPythonFrameworks(root: string): string[] {
       if (pattern.test(content) && !found.includes(label)) found.push(label);
     }
   }
-  if (fs.existsSync(path.join(root, 'manage.py')) && !found.includes('Django')) found.push('Django');
+  if (fs.existsSync(path.join(root, 'manage.py')) && !found.includes('Django'))
+    found.push('Django');
   return found;
 }
 
@@ -157,6 +165,9 @@ export function detectProject(root: string, options: DetectOptions): ProjectInfo
     fileCount: options.files.length,
     dependencies,
     devDependencies,
+    entryPoints: pkg
+      ? { main: pkg.main, module: pkg.module, bin: pkg.bin, exports: pkg.exports }
+      : null,
   };
 }
 

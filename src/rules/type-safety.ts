@@ -27,8 +27,14 @@ const explicitAny: Rule = {
         message:
           `This file uses \`any\` ${anys.length} times over ${file.sloc.toLocaleString()} lines of code ` +
           `(budget: ${budget}). Every \`any\` switches off type checking for the values that flow through it.`,
-        detail: [`lines: ${anys.slice(0, 8).map((marker) => marker.line).join(', ')}`],
-        suggestion: 'Replace the widest ones with `unknown` plus a narrowing check, or a real type.',
+        detail: [
+          `lines: ${anys
+            .slice(0, 8)
+            .map((marker) => marker.line)
+            .join(', ')}`,
+        ],
+        suggestion:
+          'Replace the widest ones with `unknown` plus a narrowing check, or a real type.',
         baseline: budget,
         current: anys.length,
       });
@@ -87,8 +93,14 @@ const unsafeAssertion: Rule = {
         message:
           `${file.path} asserts through \`any\`/\`unknown\` ${assertions.length} time${assertions.length === 1 ? '' : 's'}. ` +
           'These assertions are never verified at runtime, so a wrong assumption surfaces as a crash later.',
-        detail: [`lines: ${assertions.slice(0, 8).map((marker) => marker.line).join(', ')}`],
-        suggestion: 'Narrow with a type guard, or validate the value at the boundary where it enters.',
+        detail: [
+          `lines: ${assertions
+            .slice(0, 8)
+            .map((marker) => marker.line)
+            .join(', ')}`,
+        ],
+        suggestion:
+          'Narrow with a type guard, or validate the value at the boundary where it enters.',
         current: assertions.length,
       });
       if (finding) findings.push(finding);
@@ -119,7 +131,8 @@ const jsInTsProject: Rule = {
         `This project is set up for TypeScript, but ${jsFiles.length} source file${jsFiles.length === 1 ? ' is' : 's are'} ` +
         'plain JavaScript. Those files are not type checked, and neither is the code that calls into them.',
       detail: jsFiles.slice(0, 8),
-      suggestion: 'Convert them to TypeScript, or add them to the ignore list if they are intentional.',
+      suggestion:
+        'Convert them to TypeScript, or add them to the ignore list if they are intentional.',
       key: jsFiles,
       current: jsFiles.length,
     });

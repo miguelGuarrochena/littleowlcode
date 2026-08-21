@@ -1,10 +1,4 @@
-import type {
-  Finding,
-  MetricKey,
-  ReviewResult,
-  ReviewStatus,
-  ScopeResult,
-} from '../core/types.js';
+import type { Finding, MetricKey, ReviewResult, ReviewStatus, ScopeResult } from '../core/types.js';
 import { analyzeProject, type ProgressStep } from '../core/analyze.js';
 import { loadConfig } from '../config/load.js';
 import { compareToBaseline, readBaseline } from '../baseline/baseline.js';
@@ -47,7 +41,11 @@ export async function runReview(options: ReviewOptions): Promise<ReviewResult> {
   const comparison = baseline ? compareToBaseline(baseline, result) : null;
 
   return {
-    status: determineStatus(comparison?.newFindings ?? result.findings, comparison?.drift ?? null, scope),
+    status: determineStatus(
+      comparison?.newFindings ?? result.findings,
+      comparison?.drift ?? null,
+      scope,
+    ),
     current: result,
     baseline,
     changes,

@@ -11,6 +11,13 @@ import { architectureCommand, dependenciesCommand, impactCommand } from './comma
 import { configCommand } from './commands/config.js';
 import { ciCommand } from './commands/ci.js';
 import { promptCommand } from './commands/prompt.js';
+import {
+  deadCodeCommand,
+  doctorCommand,
+  explainCommand,
+  mapCommand,
+  testsCommand,
+} from './commands/insight.js';
 
 const version = readVersion();
 
@@ -18,7 +25,9 @@ const program = new Command();
 
 program
   .name('little-owl')
-  .description('A second pair of eyes for your codebase.\nKeep your codebase healthy while AI writes code.')
+  .description(
+    'A second pair of eyes for your codebase.\nKeep your codebase healthy while AI writes code.',
+  )
   .version(version, '-v, --version')
   .option('-C, --cwd <dir>', 'run against another directory')
   .option('--no-color', 'disable coloured output')
@@ -31,7 +40,13 @@ function globals(): { cwd?: string } {
 }
 
 function list(value: string, previous: string[] = []): string[] {
-  return [...previous, ...value.split(',').map((entry) => entry.trim()).filter(Boolean)];
+  return [
+    ...previous,
+    ...value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  ];
 }
 
 program
@@ -89,12 +104,16 @@ program
 
 program
   .command('impact')
-  .description('show what a change could affect')
-  .option('-f, --files <paths>', 'files to analyse (defaults to the current git changes)', list)
+  .argument('[file]', 'file to analyse (defaults to the current git changes)')
+  .description('show what changing a file could affect')
+  .option('-f, --files <paths>', 'additional files to analyse', list)
   .option('-b, --base <ref>', 'git ref to compare against')
   .option('--json', 'machine-readable output')
-  .action(async (options) => {
-    await run(() => impactCommand({ ...globals(), ...options }));
+  .action(async (file, options) => {
+    const files = [...(file ? [file] : []), ...((options.files as string[] | undefined) ?? [])];
+    await run(() =>
+      impactCommand({ ...globals(), ...options, ...(files.length > 0 ? { files } : {}) }),
+    );
   });
 
 program
@@ -166,6 +185,57 @@ program
   )
   .action(async (options) => {
     await run(() => promptCommand({ ...globals(), ...options }));
+  });
+
+program
+  .command('explain')
+  .argument('<file>', 'the file to investigate')
+  .description('why does this code exist? (reads git history)')
+  .option('--json', 'machine-readable output')
+  .action(async (file, options) => {
+    await run(() => explainCommand(file, { ...globals(), ...options }));
+  });
+
+program
+  .command('dead-code')
+  .description('find files nothing appears to reach')
+  .addOption(
+    new Option('--min-confidence <level>', 'lowest confidence to report').choices([
+      'high',
+      'medium',
+      'low',
+    ]),
+  )
+  .option('--include-tests', 'consider test files too')
+  .option('--json', 'machine-readable output')
+  .action(async (options) => {
+    await run(() => deadCodeCommand({ ...globals(), ...options }));
+  });
+
+program
+  .command('tests')
+  .description('find behaviour that no test appears to watch')
+  .option('--changed', 'only look at what the current change touched')
+  .option('-b, --base <ref>', 'git ref to compare against')
+  .option('--json', 'machine-readable output')
+  .action(async (options) => {
+    await run(() => testsCommand({ ...globals(), ...options }));
+  });
+
+program
+  .command('map')
+  .description('a high-level map of the project')
+  .option('--json', 'machine-readable output')
+  .action(async (options) => {
+    await run(() => mapCommand({ ...globals(), ...options }));
+  });
+
+program
+  .command('doctor')
+  .description('check that Little Owl can see this project properly')
+  .option('--json', 'machine-readable output')
+  .action(async (options) => {
+    await run(() => doctorCommand({ ...globals(), ...options }));
   });
 
 program.action(async () => {

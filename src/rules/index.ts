@@ -6,6 +6,7 @@ import { typeSafetyRules } from './type-safety.js';
 import { frameworkRules } from './framework.js';
 import { languageRules } from './languages.js';
 import { dependencyRules } from './dependencies.js';
+import { patternRules } from './patterns.js';
 
 /** Every rule Little Owl ships, in a fixed order so output is reproducible. */
 export const allRules: Rule[] = [
@@ -15,6 +16,7 @@ export const allRules: Rule[] = [
   ...typeSafetyRules,
   ...frameworkRules,
   ...languageRules,
+  ...patternRules,
   ...dependencyRules,
 ];
 
@@ -23,6 +25,7 @@ export function ruleById(id: string): Rule | undefined {
 }
 
 export {
+  patternRules,
   architectureRules,
   complexityRules,
   maintainabilityRules,

@@ -42,7 +42,9 @@ export async function configCommand(options: ConfigOptions): Promise<number> {
         print('');
       }
       const severity = config.rules[rule.id] ?? 'off';
-      print(`  ${padEnd(rule.id, 38)} ${SEVERITY_PAINT[severity](padEnd(severity, 8))} ${dim(rule.description)}`);
+      print(
+        `  ${padEnd(rule.id, 38)} ${SEVERITY_PAINT[severity](padEnd(severity, 8))} ${dim(rule.description)}`,
+      );
     }
     print('');
     print(dim('Change any of these in .little-owl/config.ts under `rules`.'));
@@ -55,7 +57,9 @@ export async function configCommand(options: ConfigOptions): Promise<number> {
     `${dim('Source')}      ${config.sourcePath ? path.relative(root, config.sourcePath) : `${colors.yellow('defaults')} ${dim('(run `little-owl init`)')}`}`,
   );
   print(`${dim('Strictness')}  ${config.strictness}`);
-  print(`${dim('Include')}     ${config.include.length > 0 ? config.include.join(', ') : 'everything'}`);
+  print(
+    `${dim('Include')}     ${config.include.length > 0 ? config.include.join(', ') : 'everything'}`,
+  );
   print(`${dim('Ignore')}      ${config.ignore.length} patterns`);
   print('');
 
@@ -84,6 +88,8 @@ export async function configCommand(options: ConfigOptions): Promise<number> {
   print('');
 
   const active = allRules.filter((rule) => (config.rules[rule.id] ?? 'off') !== 'off').length;
-  print(dim(`${active} of ${allRules.length} rules active. ${icons.arrow} little-owl config --rules`));
+  print(
+    dim(`${active} of ${allRules.length} rules active. ${icons.arrow} little-owl config --rules`),
+  );
   return 0;
 }

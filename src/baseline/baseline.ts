@@ -59,7 +59,9 @@ export function compareToBaseline(baseline: Baseline, result: AnalysisResult): B
 
   return {
     drift: metricDrift(baseline.metrics, result.metrics),
-    newFindings: result.findings.filter((finding) => !baselineFingerprints.has(finding.fingerprint)),
+    newFindings: result.findings.filter(
+      (finding) => !baselineFingerprints.has(finding.fingerprint),
+    ),
     resolvedFindings: baseline.findings.filter(
       (finding) => !currentFingerprints.has(finding.fingerprint),
     ),
@@ -98,7 +100,9 @@ export function explainDrift(baseline: Baseline, result: AnalysisResult): string
   for (const [key, label] of deltas) {
     const delta = after[key] - before[key];
     if (delta === 0) continue;
-    const noun = label.endsWith('c') ? `${label}${Math.abs(delta) === 1 ? 'y' : 'ies'}` : `${label}${Math.abs(delta) === 1 ? '' : 's'}`;
+    const noun = label.endsWith('c')
+      ? `${label}${Math.abs(delta) === 1 ? 'y' : 'ies'}`
+      : `${label}${Math.abs(delta) === 1 ? '' : 's'}`;
     reasons.push(`${delta > 0 ? '+' : ''}${delta} ${noun}`);
   }
 

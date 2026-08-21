@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AnalysisResult, ChangeSet, Finding, ParsedFile } from './types.js';
+import type { AnalysisResult, AnalysisWarning, ChangeSet, Finding, ParsedFile } from './types.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import { loadConfig } from '../config/load.js';
 import { scanFiles } from './scan.js';
@@ -50,8 +50,9 @@ export async function analyzeProject(options: AnalyzeOptions): Promise<Analysis>
   const { files: relativePaths } = scanFiles(root, config);
 
   notify('parsing');
-  const cache = options.cache === false ? new ParseCache(null) : options.cache ?? ParseCache.open(root);
-  const files = parseAll(root, relativePaths, cache);
+  const cache =
+    options.cache === false ? new ParseCache(null) : (options.cache ?? ParseCache.open(root));
+  const { files, warnings } = parseAll(root, relativePaths, cache);
   cache.save(new Set(relativePaths));
 
   const project = detectProject(root, { files: relativePaths });
@@ -106,13 +107,25 @@ export async function analyzeProject(options: AnalyzeOptions): Promise<Analysis>
       findings: sorted,
       fileMetrics: fileMetricsOf(files),
       project,
+      warnings,
       durationMs: Date.now() - started,
     },
   };
 }
 
-function parseAll(root: string, relativePaths: string[], cache: ParseCache): ParsedFile[] {
+/**
+ * Parses every file, skipping the ones that cannot be read or understood.
+ *
+ * A single unreadable or malformed file must never take down the analysis of
+ * the other few thousand, so failures become warnings the report can mention.
+ */
+function parseAll(
+  root: string,
+  relativePaths: string[],
+  cache: ParseCache,
+): { files: ParsedFile[]; warnings: AnalysisWarning[] } {
   const files: ParsedFile[] = [];
+  const warnings: AnalysisWarning[] = [];
 
   for (const relative of relativePaths) {
     const absolute = path.join(root, relative);
@@ -120,6 +133,7 @@ function parseAll(root: string, relativePaths: string[], cache: ParseCache): Par
     try {
       stats = fs.statSync(absolute);
     } catch {
+      warnings.push({ file: relative, message: 'could not be read' });
       continue;
     }
 
@@ -133,16 +147,22 @@ function parseAll(root: string, relativePaths: string[], cache: ParseCache): Par
     try {
       content = fs.readFileSync(absolute, 'utf8');
     } catch {
+      warnings.push({ file: relative, message: 'could not be read' });
       continue;
     }
 
-    const parsed = parseFile({ path: relative, absPath: absolute, content });
-    if (!parsed) continue;
-    cache.set(relative, stats, parsed);
-    files.push(parsed);
+    try {
+      const parsed = parseFile({ path: relative, absPath: absolute, content });
+      if (!parsed) continue;
+      cache.set(relative, stats, parsed);
+      files.push(parsed);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      warnings.push({ file: relative, message: `could not be parsed (${reason})` });
+    }
   }
 
-  return files;
+  return { files, warnings };
 }
 
 function ruleCrashFinding(ruleId: string, error: unknown): Finding {

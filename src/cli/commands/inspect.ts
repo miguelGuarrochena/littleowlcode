@@ -41,7 +41,11 @@ export async function architectureCommand(options: InspectOptions): Promise<numb
   print(renderArchitecture(context));
   print('');
   if (context.cycles.length > 0) {
-    print(dim(`${context.cycles.length} circular dependenc${context.cycles.length === 1 ? 'y' : 'ies'} — see \`little-owl check\`.`));
+    print(
+      dim(
+        `${context.cycles.length} circular dependenc${context.cycles.length === 1 ? 'y' : 'ies'} — see \`little-owl check\`.`,
+      ),
+    );
     print('');
   }
   return 0;
