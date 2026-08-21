@@ -5,7 +5,11 @@
 Keep your codebase healthy while AI writes code.
 
 [![npm](https://img.shields.io/npm/v/little-owl-code.svg)](https://www.npmjs.com/package/little-owl-code)
+[![CI](https://github.com/miguelGuarrochena/littleowlcode/actions/workflows/ci.yml/badge.svg)](https://github.com/miguelGuarrochena/littleowlcode/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/little-owl-code.svg)](./LICENSE)
+[![node](https://img.shields.io/node/v/little-owl-code.svg)](https://nodejs.org)
+
+[littleowlcode.com](https://littleowlcode.com) · [Documentation](https://littleowlcode.com/docs) · [Report a false positive](https://github.com/miguelGuarrochena/littleowlcode/issues/new?template=false_positive.yml)
 
 ```bash
 npx little-owl-code
@@ -559,6 +563,13 @@ Not in this version, possibly later: VS Code extension, GitHub PR bot, GitLab in
 AI provider integration, architecture visualisation, historical dashboards, team and organisation
 policies, and more language adapters (Rust, Java, C#, Kotlin, PHP).
 
+## Support
+
+- **Bugs and false positives** — [open an issue](https://github.com/miguelGuarrochena/littleowlcode/issues).
+  There is a template specifically for false positives, and they are triaged as bugs.
+- **Security** — see [SECURITY.md](./SECURITY.md). Report privately, not as a public issue.
+- **Anything else** — `info@littleowlcode.com`.
+
 ## License
 
-MIT © Little Owl Code — [littleowlcode.com](https://littleowlcode.com)
+MIT © [Miguel Guarrochena](https://littleowlcode.com)

@@ -14,13 +14,13 @@
     "technical-debt"
   ],
   "homepage": "https://littleowlcode.com",
-  "bugs": "https://github.com/littleowlcode/little-owl-code/issues",
+  "bugs": "https://github.com/miguelGuarrochena/littleowlcode/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/littleowlcode/little-owl-code.git"
+    "url": "git+https://github.com/miguelGuarrochena/littleowlcode.git"
   },
   "license": "MIT",
-  "author": "Little Owl Code",
+  "author": "Miguel Guarrochena <info@littleowlcode.com> (https://littleowlcode.com)",
   "type": "module",
   "engines": {
     "node": ">=18.18.0"

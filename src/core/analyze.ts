@@ -186,6 +186,6 @@ const ruleCrashFinding = (ruleId: string, error: unknown): Finding => {
     category: 'maintainability',
     title: `Rule ${ruleId} failed to run`,
     message: `Little Owl could not finish this rule: ${message}. The rest of the analysis is unaffected.`,
-    suggestion: 'Please report this at https://github.com/littleowlcode/little-owl-code/issues',
+    suggestion: 'Please report this at https://github.com/miguelGuarrochena/littleowlcode/issues',
   };
 };

@@ -6,7 +6,7 @@ likely to be merged.
 ## Getting set up
 
 ```bash
-git clone https://github.com/littleowlcode/little-owl-code.git
+git clone https://github.com/miguelGuarrochena/littleowlcode.git
 cd little-owl-code
 pnpm install
 pnpm check

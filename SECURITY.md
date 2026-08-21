@@ -37,8 +37,8 @@ Security fixes are applied to the latest published minor version.
 Please **do not** open a public issue for a security problem.
 
 Report it privately through
-[GitHub Security Advisories](https://github.com/littleowlcode/little-owl-code/security/advisories/new),
-or by email to `security@littleowlcode.com`.
+[GitHub Security Advisories](https://github.com/miguelGuarrochena/littleowlcode/security/advisories/new),
+or by email to `info@littleowlcode.com`.
 
 Please include:
 
