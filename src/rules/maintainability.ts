@@ -20,6 +20,57 @@ interface Block {
   line: number;
 }
 
+/** One duplicated region: the same lines, at these places, this many lines long. */
+interface Region {
+  files: string[];
+  /** Start line per file, in the same order as `files`. */
+  lines: number[];
+  /** How many lines the region covers. */
+  span: number;
+}
+
+/**
+ * Collapses the sliding windows back into whole regions.
+ *
+ * The scan reports every N-line window, so a thirty-line copy-paste arrives as
+ * two dozen overlapping matches. Consecutive windows that repeat in the same
+ * files at the same relative offsets are one region, and reporting it once —
+ * with its real length — is both shorter and more accurate.
+ */
+function mergeRegions(regions: Region[], window: number): Region[] {
+  const byPlacement = new Map<string, Region[]>();
+
+  for (const region of regions) {
+    // Regions only merge when they repeat across the same files with the same
+    // spacing between the copies.
+    const offsets = region.lines.map((line) => line - region.lines[0]!).join(',');
+    const key = `${region.files.join('|')}#${offsets}`;
+    const list = byPlacement.get(key) ?? [];
+    list.push(region);
+    byPlacement.set(key, list);
+  }
+
+  const merged: Region[] = [];
+
+  for (const list of byPlacement.values()) {
+    list.sort((a, b) => a.lines[0]! - b.lines[0]!);
+    let current: Region | null = null;
+
+    for (const region of list) {
+      if (current && region.lines[0]! <= current.lines[0]! + current.span) {
+        current.span = Math.max(current.span, region.lines[0]! + window - current.lines[0]!);
+        continue;
+      }
+      current = { ...region, lines: [...region.lines] };
+      merged.push(current);
+    }
+  }
+
+  return merged.sort(
+    (a, b) => b.span - a.span || (a.files[0]! < b.files[0]! ? -1 : 1) || a.lines[0]! - b.lines[0]!,
+  );
+}
+
 const duplicateBlock: Rule = {
   id: 'maintainability/duplicate-block',
   category: 'maintainability',
@@ -52,22 +103,33 @@ const duplicateBlock: Rule = {
       }
     }
 
-    const findings: Finding[] = [];
-    for (const [key, blocks] of [...seen.entries()].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const regions: Region[] = [];
+    for (const blocks of seen.values()) {
       if (blocks.length < 2) continue;
-      const first = blocks[0]!;
+      regions.push({
+        files: blocks.map((block) => block.file),
+        lines: blocks.map((block) => block.line),
+        span: window,
+      });
+    }
+
+    const findings: Finding[] = [];
+
+    for (const region of mergeRegions(regions, window)) {
+      const places = region.files.map((file, index) => `${file}:${region.lines[index]}`);
+      const copies = region.files.length;
 
       const finding = createFinding(this, context, {
-        file: first.file,
-        line: first.line,
-        title: `${window} identical lines repeated ${blocks.length} times`,
+        file: region.files[0]!,
+        line: region.lines[0]!,
+        title: `${region.span} identical lines repeated ${copies} times`,
         message:
-          `The same block appears in ${blocks.length} places. Duplicated logic drifts apart: a fix ` +
-          'applied in one copy silently leaves the others behind.',
-        detail: blocks.slice(0, 5).map((block) => `${block.file}:${block.line}`),
+          `The same ${region.span}-line block appears in ${copies} places. Duplicated logic drifts ` +
+          'apart: a fix applied in one copy silently leaves the others behind.',
+        detail: places.slice(0, 5),
         suggestion: 'Extract the block into a shared function and call it from each site.',
-        key: [key.slice(0, 64), blocks.length],
-        current: blocks.length,
+        key: [...places, region.span],
+        current: copies,
       });
       if (finding) findings.push(finding);
     }

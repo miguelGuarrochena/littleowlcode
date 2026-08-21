@@ -392,3 +392,36 @@ describe('ci gate', () => {
     expect(verdict.reasons[0]).toContain('dropped 9 points');
   });
 });
+
+/**
+ * Without a baseline every pre-existing finding counts as "new", which used to
+ * greet a perfectly healthy first run with NEEDS REVIEW.
+ */
+describe('review status without a baseline', () => {
+  const warning: Finding = {
+    id: 'complexity/large-file',
+    fingerprint: 'w1',
+    severity: 'warning',
+    category: 'complexity',
+    title: 'big file',
+    message: 'big file',
+  };
+  const error: Finding = { ...warning, fingerprint: 'e1', severity: 'error' };
+
+  it('is healthy when nothing is critical, however many warnings exist', () => {
+    expect(determineStatus([warning, warning], null, null, false)).toBe('healthy');
+  });
+
+  it('still degrades on an error', () => {
+    expect(determineStatus([error], null, null, false)).toBe('degraded');
+  });
+
+  it('still reports work done outside the requested area', () => {
+    const scope = { patterns: ['src/a/**'], inScope: [], outOfScope: ['src/b/x.ts'] };
+    expect(determineStatus([warning], null, scope, false)).toBe('needs-review');
+  });
+
+  it('goes back to judging the change once a baseline exists', () => {
+    expect(determineStatus([warning], null, null, true)).toBe('needs-review');
+  });
+});

@@ -90,6 +90,17 @@ export interface ImportRef {
   line: number;
   typeOnly: boolean;
   /**
+   * The names taken from the module, as written at the import site. Needed to
+   * tell an export nobody uses from one that is used somewhere else.
+   */
+  names?: string[];
+  /**
+   * True when the whole module is pulled in at once (`import * as ns`,
+   * `export * from`, `require(...)`). Any export could be reached through it,
+   * so unused-export detection has to stay silent for that module.
+   */
+  wildcard?: boolean;
+  /**
    * True when the specifier is built at runtime (`import(\`./x/${name}\`)`).
    * Such an import can reach anything, so it caps confidence rather than
    * contributing an edge.

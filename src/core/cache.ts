@@ -11,7 +11,15 @@ import { ensureLocalGitignore } from '../config/load.js';
  * and repeated runs reuse results for files that have not been touched.
  */
 
-const CACHE_VERSION = 1;
+/**
+ * Bump this whenever the shape of `ParsedFile` changes.
+ *
+ * The tool version alone is not enough: during development the version stays
+ * put while the shape moves, and a stale entry then looks valid. That is how
+ * unused-export detection first shipped reporting live code as unused — the
+ * cached imports predated the field it reads.
+ */
+const CACHE_VERSION = 2;
 
 interface CacheEntry {
   mtimeMs: number;

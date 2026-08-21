@@ -324,3 +324,120 @@ describe('impact risk', () => {
     expect(analyzeImpact(context, ['src/pay.ts']).externals).toEqual(['stripe']);
   });
 });
+
+/**
+ * Unused exports.
+ *
+ * Narrower than the file-level search on purpose: it only judges files that
+ * something already imports, and it goes silent for any module reached through
+ * a wildcard, because those leave no record of which name was wanted.
+ */
+describe('unused exports', () => {
+  it('reports an exported name nothing imports', async () => {
+    const project = TempProject.create({
+      'package.json': '{"name":"exports"}',
+      'src/utils.ts': 'export const used = 1;\nexport const forgotten = 2;\n',
+      'src/app.ts': "import { used } from './utils';\nexport const app = used;\n",
+      'src/main.ts': "import { app } from './app';\nconsole.log(app);\n",
+    });
+    try {
+      const { context } = await project.analyze();
+      const report = findDeadCode(context);
+      const utils = report.unusedExports.find((entry) => entry.file === 'src/utils.ts');
+
+      expect(utils?.names).toEqual(['forgotten']);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('counts a renamed import as usage', async () => {
+    const project = TempProject.create({
+      'package.json': '{"name":"aliased"}',
+      'src/utils.ts': 'export const original = 1;\n',
+      'src/app.ts': "import { original as renamed } from './utils';\nexport const app = renamed;\n",
+      'src/main.ts': "import { app } from './app';\nconsole.log(app);\n",
+    });
+    try {
+      const { context } = await project.analyze();
+      const report = findDeadCode(context);
+
+      expect(report.unusedExports.some((entry) => entry.file === 'src/utils.ts')).toBe(false);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('stays silent about a module someone imports wholesale', async () => {
+    // `import * as` could reach any name, so nothing can be ruled out.
+    const project = TempProject.create({
+      'package.json': '{"name":"namespace"}',
+      'src/utils.ts': 'export const a = 1;\nexport const b = 2;\n',
+      'src/app.ts': "import * as utils from './utils';\nexport const app = utils.a;\n",
+      'src/main.ts': "import { app } from './app';\nconsole.log(app);\n",
+    });
+    try {
+      const { context } = await project.analyze();
+      const report = findDeadCode(context);
+
+      expect(report.unusedExports.some((entry) => entry.file === 'src/utils.ts')).toBe(false);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('stays silent about a module a barrel re-exports wholesale', async () => {
+    const project = TempProject.create({
+      'package.json': '{"name":"barrel"}',
+      'src/utils.ts': 'export const a = 1;\nexport const b = 2;\n',
+      'src/index.ts': "export * from './utils';\n",
+      'src/main.ts': "import { a } from './index';\nconsole.log(a);\n",
+    });
+    try {
+      const { context } = await project.analyze();
+      const report = findDeadCode(context);
+
+      expect(report.unusedExports.some((entry) => entry.file === 'src/utils.ts')).toBe(false);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('does not name exports of a file nothing imports at all', async () => {
+    // That file is reported whole, by the file-level search.
+    const project = TempProject.create({
+      'package.json': '{"name":"orphan"}',
+      'src/app.ts': 'export const app = 1;\n',
+      'src/orphan.ts': 'export const lonely = 1;\n',
+      'src/main.ts': "import { app } from './app';\nconsole.log(app);\n",
+    });
+    try {
+      const { context } = await project.analyze();
+      const report = findDeadCode(context);
+
+      expect(report.unusedExports.some((entry) => entry.file === 'src/orphan.ts')).toBe(false);
+      expect(report.candidates.some((entry) => entry.path === 'src/orphan.ts')).toBe(true);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('leaves Python and Go alone', async () => {
+    // Their export detection is too shallow to say "nobody uses this name".
+    const project = TempProject.create({
+      'go.mod': 'module example.com/app\n\ngo 1.22\n',
+      'cmd/main.go':
+        'package main\n\nimport "example.com/app/internal/store"\n\nfunc main() { store.Open() }\n',
+      'internal/store/store.go':
+        'package store\n\nfunc Open() int { return 1 }\n\nfunc NeverCalled() int { return 2 }\n',
+    });
+    try {
+      const { context } = await project.analyze();
+      const report = findDeadCode(context);
+
+      expect(report.unusedExports).toEqual([]);
+    } finally {
+      project.cleanup();
+    }
+  });
+});

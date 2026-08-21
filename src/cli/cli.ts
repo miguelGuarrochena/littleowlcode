@@ -98,6 +98,7 @@ program
   .command('architecture')
   .description('show the detected layers and boundary violations')
   .option('--json', 'machine-readable output')
+  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
   .action(async (options) => {
     await run(() => architectureCommand({ ...globals(), ...options }));
   });
@@ -109,6 +110,7 @@ program
   .option('-f, --files <paths>', 'additional files to analyse', list)
   .option('-b, --base <ref>', 'git ref to compare against')
   .option('--json', 'machine-readable output')
+  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
   .action(async (file, options) => {
     const files = [...(file ? [file] : []), ...((options.files as string[] | undefined) ?? [])];
     await run(() =>
@@ -121,6 +123,7 @@ program
   .alias('deps')
   .description('compare declared dependencies with what is actually imported')
   .option('--json', 'machine-readable output')
+  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
   .action(async (options) => {
     await run(() => dependenciesCommand({ ...globals(), ...options }));
   });
@@ -192,6 +195,7 @@ program
   .argument('<file>', 'the file to investigate')
   .description('why does this code exist? (reads git history)')
   .option('--json', 'machine-readable output')
+  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
   .action(async (file, options) => {
     await run(() => explainCommand(file, { ...globals(), ...options }));
   });
@@ -208,6 +212,7 @@ program
   )
   .option('--include-tests', 'consider test files too')
   .option('--json', 'machine-readable output')
+  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
   .action(async (options) => {
     await run(() => deadCodeCommand({ ...globals(), ...options }));
   });
@@ -218,6 +223,7 @@ program
   .option('--changed', 'only look at what the current change touched')
   .option('-b, --base <ref>', 'git ref to compare against')
   .option('--json', 'machine-readable output')
+  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
   .action(async (options) => {
     await run(() => testsCommand({ ...globals(), ...options }));
   });
@@ -226,6 +232,7 @@ program
   .command('map')
   .description('a high-level map of the project')
   .option('--json', 'machine-readable output')
+  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
   .action(async (options) => {
     await run(() => mapCommand({ ...globals(), ...options }));
   });
@@ -234,6 +241,7 @@ program
   .command('doctor')
   .description('check that Little Owl can see this project properly')
   .option('--json', 'machine-readable output')
+  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
   .action(async (options) => {
     await run(() => doctorCommand({ ...globals(), ...options }));
   });

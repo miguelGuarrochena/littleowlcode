@@ -3,6 +3,28 @@ import { createFinding, isEnabled, type AnalysisContext, type Rule } from '../co
 import { classifyLayerDependency, featureOf, layerOf } from '../architecture/layers.js';
 import { compilePattern, matchesCompiled } from '../utils/glob.js';
 
+/**
+ * A cycle that only exists because a package re-exports its own submodules.
+ *
+ * `package/__init__.py` importing `package/thing.py` which imports the package
+ * back is the ordinary way Python packages are written, and it works because
+ * imports are resolved lazily at call time. Reporting it as a structural error
+ * would flag almost every Python package ever published, this tool's own
+ * dependencies included.
+ */
+function isPackageInitCycle(files: string[]): boolean {
+  const inits = files.filter((file) => file.endsWith('/__init__.py') || file === '__init__.py');
+  if (inits.length === 0) return false;
+
+  // Every other file in the loop must live under a package the loop passes
+  // through, otherwise this is a real cycle that happens to include an
+  // `__init__.py` along the way.
+  const packages = inits.map((file) => file.slice(0, file.lastIndexOf('/') + 1));
+  return files.every(
+    (file) => inits.includes(file) || packages.some((directory) => file.startsWith(directory)),
+  );
+}
+
 const circularDependency: Rule = {
   id: 'architecture/circular-dependency',
   category: 'architecture',
@@ -13,6 +35,7 @@ const circularDependency: Rule = {
     for (const cycle of context.cycles) {
       const [entry] = cycle.files;
       if (!entry) continue;
+      if (isPackageInitCycle(cycle.files)) continue;
       const chain = [...cycle.files, cycle.files[0]!];
 
       const finding = createFinding(this, context, {

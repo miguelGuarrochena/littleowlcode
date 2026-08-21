@@ -27,6 +27,8 @@ active in your project right now.
 | `next/server-import-in-client`      | error   | error    | error  |
 
 **`architecture/circular-dependency`** — files that import each other, directly or through a chain.
+A Python package whose `__init__.py` re-exports its own submodules is not reported: that loop is how
+packages are normally written, and it resolves lazily at call time.
 Cycles are found with Tarjan's algorithm over the import graph. `import type` edges are excluded:
 they are erased at build time and do not create a runtime cycle.
 
@@ -88,7 +90,9 @@ Test files are excluded from every complexity rule.
 | `maintainability/unresolved-import` | info    | info     | info    |
 | `react/effect-dependency-risk`      | info    | info     | warning |
 
-**`maintainability/duplicate-block`** — the same `minDuplicateLines` consecutive lines appear in more
+**`maintainability/duplicate-block`** — overlapping matches are merged, so a thirty-line copy-paste
+is one finding reporting thirty lines rather than two dozen reporting eight each. The same
+`minDuplicateLines` consecutive lines appear in more
 than one place. Comparison is textual after whitespace normalisation, and structural lines (imports,
 closing braces, very short lines) never start a block.
 

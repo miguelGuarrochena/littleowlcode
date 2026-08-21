@@ -10,13 +10,19 @@ import { print, resolveRoot, type GlobalOptions } from '../runtime.js';
 
 export interface InspectOptions extends GlobalOptions {
   json?: boolean;
+  /** False to skip the parse cache, leaving nothing written to the project. */
+  cache?: boolean;
 }
 
 /** `little-owl architecture` — how the code is layered, and where that breaks. */
 export async function architectureCommand(options: InspectOptions): Promise<number> {
   const root = resolveRoot(options);
   const config = await loadConfig(root);
-  const { context } = await analyzeProject({ root, config });
+  const { context } = await analyzeProject({
+    root,
+    config,
+    ...(options.cache === false ? { cache: false as const } : {}),
+  });
 
   if (options.json) {
     const filesByLayer: Record<string, string[]> = {};
@@ -60,7 +66,11 @@ export interface ImpactOptions extends InspectOptions {
 export async function impactCommand(options: ImpactOptions): Promise<number> {
   const root = resolveRoot(options);
   const config = await loadConfig(root);
-  const { context } = await analyzeProject({ root, config });
+  const { context } = await analyzeProject({
+    root,
+    config,
+    ...(options.cache === false ? { cache: false as const } : {}),
+  });
 
   let changed = options.files ?? [];
   if (changed.length === 0) {
@@ -93,7 +103,11 @@ export async function impactCommand(options: ImpactOptions): Promise<number> {
 export async function dependenciesCommand(options: InspectOptions): Promise<number> {
   const root = resolveRoot(options);
   const config = await loadConfig(root);
-  const { context } = await analyzeProject({ root, config });
+  const { context } = await analyzeProject({
+    root,
+    config,
+    ...(options.cache === false ? { cache: false as const } : {}),
+  });
 
   if (options.json) {
     const byFile: Record<string, string[]> = {};

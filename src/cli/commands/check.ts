@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { analyzeProject } from '../../core/analyze.js';
 import { loadConfig } from '../../config/load.js';
 import { checkToJson, printJson } from '../../output/json.js';
@@ -63,14 +65,42 @@ export async function checkCommand(options: CheckOptions): Promise<number> {
     );
   }
 
-  if (config.sourcePath === null) {
-    print('');
-    print(
-      dim(
-        `No configuration found. ${colors.bold('little-owl init')} sets up layers and thresholds.`,
-      ),
+  if (!options.quiet) printNextSteps(root, config.sourcePath !== null);
+  return 0;
+}
+
+/**
+ * What to do with what you just read.
+ *
+ * A first run ends on a wall of findings, and "now what?" is a fair question.
+ * The suggestions are ordered by what is actually missing: a project with no
+ * baseline cannot review anything yet, so that comes first.
+ */
+function printNextSteps(root: string, configured: boolean): void {
+  const hasBaseline = fs.existsSync(path.join(root, '.little-owl', 'baseline.json'));
+  const steps: string[] = [];
+
+  if (!hasBaseline) {
+    steps.push(
+      `${colors.bold('little-owl baseline')}  record this as the reference, so the next review shows only what changed`,
+    );
+  }
+  if (!configured) {
+    steps.push(
+      `${colors.bold('little-owl init')}      declare your layers instead of letting them be inferred`,
+    );
+  }
+  steps.push(
+    `${colors.bold('little-owl map')}       get your bearings — areas, entry points, what to read first`,
+  );
+  if (hasBaseline) {
+    steps.push(
+      `${colors.bold('little-owl review')}    see what your latest change did to the project`,
     );
   }
 
-  return 0;
+  print('');
+  print(dim('Next'));
+  print('');
+  for (const step of steps.slice(0, 3)) print(dim(`  ${step}`));
 }

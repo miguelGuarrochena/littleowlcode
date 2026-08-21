@@ -172,6 +172,32 @@ function collectFunctions(source: ts.SourceFile): FunctionInfo[] {
   return functions;
 }
 
+/** What an import statement actually takes out of the module. */
+function bindingOf(clause: ts.ImportClause | undefined): { names?: string[]; wildcard?: boolean } {
+  if (!clause) return { wildcard: true }; // `import './side-effect'`
+
+  const bindings = clause.namedBindings;
+  if (bindings && ts.isNamespaceImport(bindings)) return { wildcard: true };
+
+  const names: string[] = [];
+  if (clause.name) names.push('default');
+  if (bindings && ts.isNamedImports(bindings)) {
+    // `import { a as b }` consumes `a` from the module.
+    for (const element of bindings.elements)
+      names.push((element.propertyName ?? element.name).text);
+  }
+  return { names };
+}
+
+/** The same question for `export … from './x'`. */
+function reExportBindingOf(clause: ts.NamedExportBindings | undefined): {
+  names?: string[];
+  wildcard?: boolean;
+} {
+  if (!clause || !ts.isNamedExports(clause)) return { wildcard: true };
+  return { names: clause.elements.map((element) => (element.propertyName ?? element.name).text) };
+}
+
 function collectImports(source: ts.SourceFile): ImportRef[] {
   const imports: ImportRef[] = [];
 
@@ -181,6 +207,7 @@ function collectImports(source: ts.SourceFile): ImportRef[] {
     node: ts.Node,
     typeOnly: boolean,
     computed = false,
+    binding: { names?: string[]; wildcard?: boolean } = {},
   ): void => {
     imports.push({
       raw: specifier,
@@ -188,6 +215,8 @@ function collectImports(source: ts.SourceFile): ImportRef[] {
       typeOnly,
       line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
       ...(computed ? { computed: true } : {}),
+      ...(binding.names && binding.names.length > 0 ? { names: binding.names } : {}),
+      ...(binding.wildcard ? { wildcard: true } : {}),
     });
   };
 
@@ -200,13 +229,20 @@ function collectImports(source: ts.SourceFile): ImportRef[] {
           ts.isNamedImports(clause.namedBindings) &&
           clause.namedBindings.elements.length > 0 &&
           clause.namedBindings.elements.every((element) => element.isTypeOnly));
-      push(node.moduleSpecifier.text, 'import', node, typeOnly === true);
+      push(node.moduleSpecifier.text, 'import', node, typeOnly === true, false, bindingOf(clause));
     } else if (
       ts.isExportDeclaration(node) &&
       node.moduleSpecifier &&
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
-      push(node.moduleSpecifier.text, 'export-from', node, node.isTypeOnly);
+      push(
+        node.moduleSpecifier.text,
+        'export-from',
+        node,
+        node.isTypeOnly,
+        false,
+        reExportBindingOf(node.exportClause),
+      );
     } else if (ts.isCallExpression(node)) {
       const first = node.arguments[0];
       const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
@@ -214,7 +250,9 @@ function collectImports(source: ts.SourceFile): ImportRef[] {
 
       if ((isRequire || isDynamic) && first) {
         if (ts.isStringLiteral(first)) {
-          push(first.text, isDynamic ? 'dynamic' : 'require', node, false);
+          push(first.text, isDynamic ? 'dynamic' : 'require', node, false, false, {
+            wildcard: true,
+          });
         } else if (isDynamic) {
           // A specifier built at runtime could point anywhere. Recording it
           // is what stops dead-code and impact from sounding more certain

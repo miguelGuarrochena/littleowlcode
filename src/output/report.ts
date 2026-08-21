@@ -127,7 +127,7 @@ export function renderHealth(result: AnalysisResult, options: RenderOptions = {}
 }
 
 /** Every score, with the baseline value alongside it when there is one. */
-function renderMetricComparison(current: Metrics, baseline: Metrics | null): string[] {
+export function renderMetricComparison(current: Metrics, baseline: Metrics | null): string[] {
   const line = (label: string, key: keyof Metrics): string =>
     metricLine({
       label,
@@ -172,7 +172,8 @@ export function renderReview(review: ReviewResult, options: RenderOptions = {}):
   } else {
     sections.push(
       '',
-      dim('No baseline yet — run `little-owl baseline` to make future reviews comparable.'),
+      dim('No baseline recorded, so this is the state of the code rather than the effect of'),
+      dim('a change. Run `little-owl baseline` to make the next review a comparison.'),
     );
   }
 

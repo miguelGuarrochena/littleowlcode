@@ -196,7 +196,8 @@ showing.
 | `little-owl config`         | Settings in effect (`--rules` to list every rule)       |
 | `little-owl doctor`         | Is Little Owl seeing this project properly?             |
 
-Useful flags: `--json`, `--details`, `--quiet`, `--scope`, `--base <ref>`, `-C <dir>`, `--no-color`.
+Useful flags: `--json`, `--details`, `--quiet`, `--scope`, `--base <ref>`, `-C <dir>`, `--no-color`,
+`--no-cache` (analyse without writing anything to the project).
 
 ### review
 
@@ -498,7 +499,8 @@ Worth being straight about:
 - **Duplicate detection is textual.** It finds copy-paste, not semantically equivalent code.
 - **Dead code detection is reachability, not proof.** Framework conventions, dynamic imports and
   configuration keep files alive without an import. Confidence levels say how much each candidate
-  can be trusted, and Little Owl never deletes anything.
+  can be trusted, and Little Owl never deletes anything. Unused _exports_ are reported too, but only
+  for TypeScript and JavaScript, and never for a module something imports wholesale.
 - **Test gaps are a risk signal, not coverage.** Little Owl follows imports and names; it does not
   run your tests. Use a coverage tool for real numbers.
 - **`explain` only reports what the repository records.** If no commit message says why something

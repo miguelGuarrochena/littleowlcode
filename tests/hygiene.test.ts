@@ -313,3 +313,50 @@ describe('empty analysis', () => {
     expect(scanFiles(broken.root, resolveConfig({})).files).toEqual([]);
   });
 });
+
+/**
+ * The parse cache stores `ParsedFile` as JSON and reuses it across runs, so a
+ * field added to that shape has to survive the round trip — and any entry
+ * written before the field existed has to be thrown away. Unused-export
+ * detection first shipped reporting live code as unused precisely because
+ * stale entries were still considered valid.
+ */
+describe('parse cache and the shape it stores', () => {
+  it('preserves the names an import takes from a module', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"round-trip"}',
+      'src/utils.ts': 'export const a = 1;\nexport const b = 2;\n',
+      'src/app.ts': "import { a as renamed } from './utils';\nexport const app = renamed;\n",
+    });
+
+    // First run populates the cache from a real parse.
+    await analyzeProject({ root: project.root, config: resolveConfig({}) });
+
+    // Second run answers entirely from disk.
+    const { context } = await analyzeProject({ root: project.root, config: resolveConfig({}) });
+    const app = context.fileMap.get('src/app.ts');
+    const reference = app?.imports.find((entry) => entry.resolved === 'src/utils.ts');
+
+    expect(reference?.names).toEqual(['a']);
+    expect(reference?.wildcard).toBeUndefined();
+  });
+
+  it('records a namespace import as taking the whole module', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"wildcard"}',
+      'src/utils.ts': 'export const a = 1;\n',
+      'src/app.ts': "import * as utils from './utils';\nexport const app = utils.a;\n",
+    });
+
+    const { context } = await analyzeProject({
+      root: project.root,
+      config: resolveConfig({}),
+      cache: false,
+    });
+    const reference = context.fileMap
+      .get('src/app.ts')
+      ?.imports.find((entry) => entry.resolved === 'src/utils.ts');
+
+    expect(reference?.wildcard).toBe(true);
+  });
+});

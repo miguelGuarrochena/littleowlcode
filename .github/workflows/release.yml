@@ -25,6 +25,10 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: pnpm
 
+      # Trusted publishing needs a newer npm than Node 20 ships with.
+      - name: Use an npm that supports trusted publishing
+        run: npm install -g npm@latest
+
       - run: pnpm install --frozen-lockfile
 
       - name: Verify before publishing
@@ -40,7 +44,12 @@ jobs:
             exit 1
           fi
 
+      # Trusted publishing: npm verifies this workflow's OIDC identity instead of
+      # a long-lived token. npm is restricting tokens that bypass 2FA (account
+      # changes Aug 2026, direct publishing Jan 2027), and there is no secret
+      # here to leak or rotate. Needs npm >= 11.5.1, hence the upgrade above.
+      #
+      # Configure it once at npmjs.com → the package → Settings → Trusted
+      # publisher, pointing at this repository and `release.yml`.
       - name: Publish to npm
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

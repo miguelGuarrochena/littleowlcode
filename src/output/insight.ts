@@ -20,6 +20,42 @@ const CONFIDENCE_PAINT: Record<Confidence, (text: string) => string> = {
   low: dim,
 };
 
+/** Exported names nothing imports, grouped by the file that declares them. */
+function renderUnusedExports(report: DeadCodeReport): string[] {
+  if (report.unusedExports.length === 0) return [];
+
+  const total = report.unusedExports.reduce((sum, entry) => sum + entry.names.length, 0);
+  const lines: string[] = [
+    '',
+    rule(),
+    '',
+    colors.bold('UNUSED EXPORTS'),
+    dim(`${countLabel(total, 'name')} exported from files that are otherwise in use.`),
+    '',
+  ];
+
+  for (const entry of report.unusedExports.slice(0, 15)) {
+    lines.push(
+      `  ${colors.bold(entry.file)} ${CONFIDENCE_PAINT[entry.confidence](entry.confidence)}`,
+    );
+    lines.push(dim(`    ${entry.names.join(', ')}`));
+    for (const caveat of entry.caveats) lines.push(dim(`    ${icons.warn} ${caveat}`));
+    lines.push('');
+  }
+  if (report.unusedExports.length > 15) {
+    lines.push(dim(`  ... and ${report.unusedExports.length - 15} more files`), '');
+  }
+
+  lines.push(
+    ...wrap(
+      'These names are exported but nothing imports them. Often the export keyword is simply no ' +
+        'longer needed — the value may still be used inside its own file.',
+    ).map((line) => dim(line)),
+  );
+
+  return lines;
+}
+
 export function renderDeadCode(report: DeadCodeReport): string {
   const lines: string[] = [heading('DEAD CODE'), ''];
 
@@ -33,6 +69,7 @@ export function renderDeadCode(report: DeadCodeReport): string {
         ),
       );
     }
+    lines.push(...renderUnusedExports(report));
     return lines.join('\n');
   }
 
@@ -64,6 +101,8 @@ export function renderDeadCode(report: DeadCodeReport): string {
         'keep a file alive without an import statement, so check before deleting anything.',
     ).map((line) => dim(line)),
   );
+
+  lines.push(...renderUnusedExports(report));
 
   if (report.hasUnresolvedDynamicImports) {
     lines.push(

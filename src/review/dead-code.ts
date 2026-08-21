@@ -1,6 +1,7 @@
 import type { AnalysisContext } from '../core/context.js';
+import type { ParsedFile } from '../core/types.js';
 import { basename, dirOf } from '../utils/paths.js';
-import { compilePattern, matchesCompiled } from '../utils/glob.js';
+import { compilePattern, matchesCompiled, type CompiledPattern } from '../utils/glob.js';
 
 /**
  * Dead code detection, deliberately cautious.
@@ -25,8 +26,18 @@ export interface DeadCodeCandidate {
   exports: number;
 }
 
+export interface UnusedExport {
+  file: string;
+  /** Exported names nothing else imports. */
+  names: string[];
+  confidence: Confidence;
+  caveats: string[];
+}
+
 export interface DeadCodeReport {
   candidates: DeadCodeCandidate[];
+  /** Names exported from a live file that no other file imports. */
+  unusedExports: UnusedExport[];
   /** Files skipped because a framework convention makes them entry points. */
   entryPoints: string[];
   /** True when the project uses dynamic imports we could not fully resolve. */
@@ -80,7 +91,101 @@ export interface DeadCodeOptions {
   minConfidence?: Confidence;
 }
 
+/**
+ * Exported names that nothing imports.
+ *
+ * Deliberately narrower than the file-level search. It only looks at files
+ * something already imports — a file nobody imports at all is reported as a
+ * whole, not name by name — and it goes quiet for any module reached through
+ * `import * as ns`, `export * from`, `require()` or a dynamic import, because
+ * those take everything and leave no record of which name was wanted.
+ *
+ * Only TypeScript and JavaScript participate. Python and Go export detection is
+ * too shallow to say "nobody uses this name" without being wrong regularly.
+ */
 const CONFIDENCE_RANK: Record<Confidence, number> = { high: 3, medium: 2, low: 1 };
+
+/** What each module has taken out of it, and which modules were taken whole. */
+interface NameUsage {
+  byFile: Map<string, Set<string>>;
+  /** Modules reached through a wildcard, where no name can be ruled out. */
+  wildcarded: Set<string>;
+}
+
+function collectNameUsage(context: AnalysisContext): NameUsage {
+  const byFile = new Map<string, Set<string>>();
+  const wildcarded = new Set<string>();
+
+  for (const file of context.files) {
+    for (const reference of file.imports) {
+      const target = reference.resolved;
+      if (!target) continue;
+
+      if (reference.wildcard) {
+        wildcarded.add(target);
+        continue;
+      }
+
+      const names = byFile.get(target) ?? new Set<string>();
+      for (const name of reference.names ?? []) names.add(name);
+      byFile.set(target, names);
+    }
+  }
+
+  return { byFile, wildcarded };
+}
+
+/** Whether a file's exported names can be judged at all. */
+function canJudgeExports(
+  file: ParsedFile,
+  context: AnalysisContext,
+  usage: NameUsage,
+  conventions: CompiledPattern[],
+  packageEntries: Set<string>,
+): boolean {
+  if (file.isTest) return false;
+  // Python and Go export detection is too shallow to say "nobody uses this".
+  if (file.language !== 'typescript' && file.language !== 'javascript') return false;
+  if (file.exports.length === 0) return false;
+  // No importers at all is the file-level case, reported separately.
+  if (context.graph.dependentsOf(file.path).length === 0) return false;
+  // Something takes the whole module; any name could be the one it wanted.
+  if (usage.wildcarded.has(file.path)) return false;
+  if (matchesCompiled(file.path, conventions)) return false;
+  if (packageEntries.has(file.path)) return false;
+  return !isInEntryDirectory(file.path);
+}
+
+function findUnusedExports(
+  context: AnalysisContext,
+  conventions: CompiledPattern[],
+  packageEntries: Set<string>,
+): UnusedExport[] {
+  const usage = collectNameUsage(context);
+  // A name can also be reached from a test, which is not counted as usage.
+  const caveats = context.files.some((file) => file.isTest)
+    ? ['test files are not counted as usage']
+    : [];
+
+  const unused: UnusedExport[] = [];
+
+  for (const file of context.files) {
+    if (!canJudgeExports(file, context, usage, conventions, packageEntries)) continue;
+
+    const used = usage.byFile.get(file.path) ?? new Set<string>();
+    const names = file.exports.filter((name) => !used.has(name)).sort();
+    if (names.length === 0) continue;
+
+    unused.push({
+      file: file.path,
+      names,
+      confidence: caveats.length === 0 ? 'high' : 'medium',
+      caveats,
+    });
+  }
+
+  return unused.sort((a, b) => (a.file < b.file ? -1 : 1));
+}
 
 export function findDeadCode(
   context: AnalysisContext,
@@ -149,6 +254,7 @@ export function findDeadCode(
   const floor = CONFIDENCE_RANK[options.minConfidence ?? 'low'];
 
   return {
+    unusedExports: findUnusedExports(context, conventions, packageEntries),
     candidates: candidates
       .filter((candidate) => CONFIDENCE_RANK[candidate.confidence] >= floor)
       .sort(

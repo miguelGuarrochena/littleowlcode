@@ -251,3 +251,69 @@ describe('rule severity configuration', () => {
     expect(context.cycles).toHaveLength(0);
   });
 });
+
+/**
+ * The duplicate scan slides an N-line window, so one copy-pasted region used to
+ * arrive as a couple of dozen overlapping findings. Real projects went from
+ * roughly fifty of them to under twenty once regions were merged.
+ */
+describe('duplicate blocks', () => {
+  const region = Array.from(
+    { length: 20 },
+    (_, index) => `  const value${index} = compute(${index}) + offset;`,
+  ).join('\n');
+
+  it('reports one long region rather than every window inside it', async () => {
+    const project = TempProject.create({
+      'package.json': '{"name":"dupes"}',
+      'src/a.ts': `export function a(compute: (n: number) => number, offset: number) {\n${region}\n  return value0;\n}\n`,
+      'src/b.ts': `export function b(compute: (n: number) => number, offset: number) {\n${region}\n  return value1;\n}\n`,
+    });
+    try {
+      const { result } = await project.analyze();
+      const findings = findingsFor(result.findings, 'maintainability/duplicate-block');
+
+      expect(findings).toHaveLength(1);
+      // The title carries the real length, not the window size.
+      expect(findings[0]?.title).toMatch(/^20 identical lines repeated 2 times$/);
+      expect(findings[0]?.detail).toEqual(['src/a.ts:2', 'src/b.ts:2']);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('keeps two separate regions separate', async () => {
+    const other = Array.from(
+      { length: 12 },
+      (_, index) => `  const other${index} = lookup("${index}") ?? fallback;`,
+    ).join('\n');
+
+    const project = TempProject.create({
+      'package.json': '{"name":"dupes"}',
+      'src/a.ts': `export function a(compute: (n: number) => number, offset: number, lookup: (k: string) => string, fallback: string) {\n${region}\n  const gap = 1;\n${other}\n  return gap;\n}\n`,
+      'src/b.ts': `export function b(compute: (n: number) => number, offset: number, lookup: (k: string) => string, fallback: string) {\n${region}\n  const other = 2;\n${other}\n  return other;\n}\n`,
+    });
+    try {
+      const { result } = await project.analyze();
+      const findings = findingsFor(result.findings, 'maintainability/duplicate-block');
+
+      expect(findings.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('says nothing when the code is merely similar', async () => {
+    const project = TempProject.create({
+      'package.json': '{"name":"distinct"}',
+      'src/a.ts': 'export const a = (n: number) => n * 2;\n',
+      'src/b.ts': 'export const b = (n: number) => n * 3;\n',
+    });
+    try {
+      const { result } = await project.analyze();
+      expect(findingsFor(result.findings, 'maintainability/duplicate-block')).toEqual([]);
+    } finally {
+      project.cleanup();
+    }
+  });
+});

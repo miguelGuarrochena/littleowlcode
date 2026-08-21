@@ -19,9 +19,13 @@ import { dim, colors, icons } from '../../output/theme.js';
 import { toPosix } from '../../utils/paths.js';
 import { print, resolveRoot, type GlobalOptions } from '../runtime.js';
 import type { AnalysisContext } from '../../core/context.js';
+import type { AnalysisResult, AnalysisWarning } from '../../core/types.js';
+import type { ResolvedConfig } from '../../config/schema.js';
 
 export interface InsightOptions extends GlobalOptions {
   json?: boolean;
+  /** False to skip the parse cache, leaving nothing written to the project. */
+  cache?: boolean;
 }
 
 async function contextFor(
@@ -29,7 +33,11 @@ async function contextFor(
 ): Promise<{ root: string; context: AnalysisContext }> {
   const root = resolveRoot(options);
   const config = await loadConfig(root);
-  const { context } = await analyzeProject({ root, config });
+  const { context } = await analyzeProject({
+    root,
+    config,
+    ...(options.cache === false ? { cache: false as const } : {}),
+  });
   return { root, context };
 }
 
@@ -160,95 +168,188 @@ interface DoctorCheck {
  * Every check is about Little Owl's own ability to do its job, not about the
  * quality of the code. It is the command to run when the output looks wrong.
  */
-export async function doctorCommand(options: InsightOptions): Promise<number> {
-  const root = resolveRoot(options);
-  const config = await loadConfig(root);
-  const started = Date.now();
-  const { result, context } = await analyzeProject({ root, config });
-  const elapsed = Date.now() - started;
+/**
+ * Each check is its own function of the analysis.
+ *
+ * Doctor answers one question — "can Little Owl see this project properly?" —
+ * and every check is one independent piece of that answer, so they read and
+ * change independently too.
+ */
+type CheckBuilder = (input: DoctorInput) => DoctorCheck | null;
 
-  const checks: DoctorCheck[] = [];
+interface DoctorInput {
+  root: string;
+  config: ResolvedConfig;
+  result: AnalysisResult;
+  context: AnalysisContext;
+  elapsed: number;
+}
 
-  checks.push({
-    name: 'Node.js',
-    status: 'ok',
-    detail: `${process.version} (needs >= 18.18)`,
-  });
+const nodeCheck: CheckBuilder = () => ({
+  name: 'Node.js',
+  status: 'ok',
+  detail: `${process.version} (needs >= 18.18)`,
+});
 
-  checks.push({
+const projectCheck: CheckBuilder = ({ result }) => {
+  const { languages, frameworks } = result.project;
+  if (languages.length === 0) {
+    return {
+      name: 'Project type',
+      status: 'warn',
+      detail: 'no supported source files found — check `include` and `ignore`',
+    };
+  }
+  return {
     name: 'Project type',
-    status: result.project.languages.length > 0 ? 'ok' : 'warn',
-    detail:
-      result.project.languages.length > 0
-        ? `${result.project.languages.join(', ')}${result.project.frameworks.length > 0 ? ` · ${result.project.frameworks.join(', ')}` : ''}`
-        : 'no supported source files found — check `include` and `ignore`',
-  });
+    status: 'ok',
+    detail: [languages.join(', '), frameworks.join(', ')].filter(Boolean).join(' · '),
+  };
+};
 
-  checks.push({
-    name: 'Git',
-    status: result.project.isGitRepo ? 'ok' : 'info',
-    detail: result.project.isGitRepo
-      ? 'available — review, drift and archaeology all work'
-      : 'not a git repository — review and explain have nothing to compare against',
-  });
+const gitCheck: CheckBuilder = ({ result }) => ({
+  name: 'Git',
+  status: result.project.isGitRepo ? 'ok' : 'info',
+  detail: result.project.isGitRepo
+    ? 'available — review, drift and archaeology all work'
+    : 'not a git repository — review and explain have nothing to compare against',
+});
 
-  checks.push({
-    name: 'Configuration',
-    status: config.sourcePath ? 'ok' : 'info',
-    detail: config.sourcePath
-      ? path.relative(root, config.sourcePath)
-      : 'using defaults — run `little-owl init` to declare your layers',
-  });
+const configCheck: CheckBuilder = ({ root, config }) => ({
+  name: 'Configuration',
+  status: config.sourcePath ? 'ok' : 'info',
+  detail: config.sourcePath
+    ? path.relative(root, config.sourcePath)
+    : 'using defaults — run `little-owl init` to declare your layers',
+});
 
-  const baselineFile = path.join(root, '.little-owl', 'baseline.json');
-  checks.push({
+const baselineCheck: CheckBuilder = ({ root }) => {
+  const exists = fs.existsSync(path.join(root, '.little-owl', 'baseline.json'));
+  return {
     name: 'Baseline',
-    status: fs.existsSync(baselineFile) ? 'ok' : 'info',
-    detail: fs.existsSync(baselineFile)
+    status: exists ? 'ok' : 'info',
+    detail: exists
       ? 'recorded — reviews compare against it'
       : 'none yet — run `little-owl baseline`',
-  });
+  };
+};
 
-  checks.push({
-    name: 'Files analysed',
-    status: result.truncated || result.project.fileCount === 0 ? 'warn' : 'ok',
-    detail: filesAnalysedDetail(result.project.fileCount, result.truncated, elapsed),
-  });
+const filesCheck: CheckBuilder = ({ result, elapsed }) => ({
+  name: 'Files analysed',
+  status: result.truncated || result.project.fileCount === 0 ? 'warn' : 'ok',
+  detail: filesAnalysedDetail(result.project.fileCount, result.truncated, elapsed),
+});
 
+const resolutionCheck: CheckBuilder = ({ context }) => {
   const unresolved = context.graph.unresolved.length;
-  checks.push({
+  return {
     name: 'Import resolution',
     status: unresolved === 0 ? 'ok' : 'warn',
     detail:
       unresolved === 0
         ? `${context.graph.edges.length} internal imports resolved`
         : `${unresolved} imports unresolved — usually a path alias missing from tsconfig`,
-  });
+  };
+};
 
-  checks.push({
+const architectureCheck: CheckBuilder = ({ context }) => {
+  const { order, inferred } = context.layers;
+  return {
     name: 'Architecture',
-    status: context.layers.order.length >= 2 ? 'ok' : 'info',
+    status: order.length >= 2 ? 'ok' : 'info',
     detail:
-      context.layers.order.length >= 2
-        ? `${context.layers.order.join(' → ')}${context.layers.inferred ? ' (inferred)' : ' (configured)'}`
+      order.length >= 2
+        ? `${order.join(' → ')} (${inferred ? 'inferred' : 'configured'})`
         : 'no layers detected — boundary checks are inactive',
-  });
+  };
+};
 
-  checks.push({
+const testsCheck: CheckBuilder = ({ context }) => {
+  const count = context.files.filter((file) => file.isTest).length;
+  return {
     name: 'Tests',
-    status: context.files.some((file) => file.isTest) ? 'ok' : 'info',
-    detail: context.files.some((file) => file.isTest)
-      ? `${context.files.filter((file) => file.isTest).length} test files found`
-      : 'no test files found',
-  });
+    status: count > 0 ? 'ok' : 'info',
+    detail: count > 0 ? `${count} test files found` : 'no test files found',
+  };
+};
 
-  if (result.warnings.length > 0) {
-    checks.push({
-      name: 'Skipped files',
-      status: 'warn',
-      detail: `${result.warnings.length} files could not be read or parsed`,
-    });
+/** Only appears when something was actually skipped. */
+const skippedCheck: CheckBuilder = ({ result }) =>
+  result.warnings.length === 0
+    ? null
+    : {
+        name: 'Skipped files',
+        status: 'warn',
+        detail: `${result.warnings.length} files could not be read or parsed`,
+      };
+
+const CHECKS: CheckBuilder[] = [
+  nodeCheck,
+  projectCheck,
+  gitCheck,
+  configCheck,
+  baselineCheck,
+  filesCheck,
+  resolutionCheck,
+  architectureCheck,
+  testsCheck,
+  skippedCheck,
+];
+
+function buildChecks(input: DoctorInput): DoctorCheck[] {
+  return CHECKS.map((build) => build(input)).filter(
+    (check): check is DoctorCheck => check !== null,
+  );
+}
+
+const CHECK_MARK: Record<DoctorCheck['status'], () => string> = {
+  ok: () => colors.green(icons.ok),
+  warn: () => colors.yellow(icons.warn),
+  info: () => dim(icons.info),
+};
+
+function printChecks(checks: DoctorCheck[], warnings: AnalysisWarning[]): void {
+  print('');
+  print(`${icons.owl} ${colors.bold('Little Owl doctor')}`);
+  print('');
+
+  for (const check of checks) {
+    print(`${CHECK_MARK[check.status]()} ${check.name.padEnd(20)} ${dim(check.detail)}`);
   }
+
+  if (warnings.length > 0) {
+    print('');
+    print(colors.yellow('Skipped files'));
+    for (const warning of warnings.slice(0, 10)) {
+      print(dim(`  ${warning.file ?? '?'} — ${warning.message}`));
+    }
+    if (warnings.length > 10) print(dim(`  ... and ${warnings.length - 10} more`));
+  }
+
+  const problems = checks.filter((check) => check.status === 'warn').length;
+  print('');
+  print(
+    problems === 0
+      ? colors.green(`${icons.ok} Everything Little Owl needs is in place.`)
+      : colors.yellow(
+          `${icons.warn} ${problems} thing${problems === 1 ? ' limits' : 's limit'} what Little Owl can see.`,
+        ),
+  );
+  print('');
+}
+
+export async function doctorCommand(options: InsightOptions): Promise<number> {
+  const root = resolveRoot(options);
+  const config = await loadConfig(root);
+  const started = Date.now();
+  const { result, context } = await analyzeProject({
+    root,
+    config,
+    ...(options.cache === false ? { cache: false as const } : {}),
+  });
+  const elapsed = Date.now() - started;
+
+  const checks = buildChecks({ root, config, result, context, elapsed });
 
   if (options.json) {
     printJson({
@@ -260,40 +361,6 @@ export async function doctorCommand(options: InsightOptions): Promise<number> {
     return 0;
   }
 
-  print('');
-  print(`${icons.owl} ${colors.bold('Little Owl doctor')}`);
-  print('');
-
-  for (const check of checks) {
-    const mark =
-      check.status === 'ok'
-        ? colors.green(icons.ok)
-        : check.status === 'warn'
-          ? colors.yellow(icons.warn)
-          : dim(icons.info);
-    print(`${mark} ${check.name.padEnd(20)} ${dim(check.detail)}`);
-  }
-
-  if (result.warnings.length > 0) {
-    print('');
-    print(colors.yellow('Skipped files'));
-    for (const warning of result.warnings.slice(0, 10)) {
-      print(dim(`  ${warning.file ?? '?'} — ${warning.message}`));
-    }
-    if (result.warnings.length > 10) {
-      print(dim(`  ... and ${result.warnings.length - 10} more`));
-    }
-  }
-
-  print('');
-  const problems = checks.filter((check) => check.status === 'warn').length;
-  print(
-    problems === 0
-      ? colors.green(`${icons.ok} Everything Little Owl needs is in place.`)
-      : colors.yellow(
-          `${icons.warn} ${problems} thing${problems === 1 ? ' limits' : 's limit'} what Little Owl can see.`,
-        ),
-  );
-  print('');
+  printChecks(checks, result.warnings);
   return 0;
 }

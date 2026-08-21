@@ -148,6 +148,37 @@ Never reported at all:
   `middleware.ts`, `+page.svelte`, `__init__.py`, `urls.py`, and similar
 - anything under `pages/`, `app/`, `api/`, `routes/`, `migrations/`, `scripts/`,
   `bin/`, `cmd/`
+
+### Unused exports
+
+The same command also names exports that nothing imports, for files that are
+otherwise in use:
+
+```
+UNUSED EXPORTS
+7 names exported from files that are otherwise in use.
+
+  src/lib/format.ts high
+    formatOrdinal, parseLoosely
+
+  src/lib/session.ts medium
+    ⚠ test files are not counted as usage
+    refreshToken
+```
+
+This is deliberately narrower than the file-level search:
+
+- Only TypeScript and JavaScript. Python and Go export detection is too shallow
+  to claim nobody uses a name.
+- Only files something already imports. A file nothing imports is reported
+  whole, above.
+- Nothing at all is said about a module reached through `import * as ns`,
+  `export * from`, `require()` or a dynamic import — those take everything and
+  leave no record of which name was wanted.
+
+Often the fix is just deleting the `export` keyword: the value may still be used
+inside its own file.
+
 - files named as entry points by `package.json` (`main`, `bin`, `exports`)
 - test files, unless you pass `--include-tests`
 

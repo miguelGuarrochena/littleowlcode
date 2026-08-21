@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeFixture, findingsFor } from './helpers.js';
+import { TempProject } from './temp-project.js';
 
 describe('project analysis', () => {
   it('parses a clean project and reports no architecture problems', async () => {
@@ -87,5 +88,64 @@ describe('go analysis', () => {
 
     expect(context.graph.dependenciesOf('cmd/main.go')).toEqual(['internal/store/store.go']);
     expect(findingsFor(result.findings, 'go/ignored-error')).toHaveLength(1);
+  });
+});
+
+/**
+ * `package/__init__.py` importing a submodule that imports the package back is
+ * how Python packages are normally written — it works because imports resolve
+ * lazily. Reporting it flagged seven "errors" in pip alone, all of them
+ * idiomatic.
+ */
+describe('python package cycles', () => {
+  it('ignores a package re-exporting its own submodule', async () => {
+    const project = TempProject.create({
+      'requirements.txt': 'flask\n',
+      'shop/__init__.py': 'from shop.orders import Order\n',
+      'shop/orders.py': 'from shop import helper\n\n\nclass Order:\n    pass\n',
+      'shop/helper.py': 'def helper():\n    return 1\n',
+      'main.py': 'from shop import Order\n\nprint(Order)\n',
+    });
+    try {
+      const { result } = await project.analyze();
+      expect(findingsFor(result.findings, 'architecture/circular-dependency')).toEqual([]);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('still reports a real cycle between sibling modules', async () => {
+    const project = TempProject.create({
+      'requirements.txt': 'flask\n',
+      'shop/orders.py': 'from shop.billing import charge\n\n\ndef place():\n    return charge()\n',
+      'shop/billing.py': 'from shop.orders import place\n\n\ndef charge():\n    return place\n',
+      'main.py': 'from shop.orders import place\n\nprint(place)\n',
+    });
+    try {
+      const { result } = await project.analyze();
+      expect(findingsFor(result.findings, 'architecture/circular-dependency')).toHaveLength(1);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('still reports a cycle that only passes through a package boundary', async () => {
+    // `__init__.py` is in the loop, but so is a module from another package —
+    // that is not the lazy-import pattern.
+    const project = TempProject.create({
+      'requirements.txt': 'flask\n',
+      'shop/__init__.py': 'from billing.core import charge\n',
+      'billing/__init__.py': '\n',
+      'billing/core.py': 'import shop\n\n\ndef charge():\n    return shop\n',
+      'main.py': 'import shop\n\nprint(shop)\n',
+    });
+    try {
+      const { result } = await project.analyze();
+      expect(
+        findingsFor(result.findings, 'architecture/circular-dependency').length,
+      ).toBeGreaterThan(0);
+    } finally {
+      project.cleanup();
+    }
   });
 });

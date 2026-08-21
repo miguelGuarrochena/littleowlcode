@@ -57,6 +57,24 @@ const NOT_USUALLY_TESTED = [
   'next.config.*',
   'jest.setup.*',
   'vitest.setup.*',
+  // Framework files the router owns. Teams cover these with end-to-end tests
+  // if at all, so listing every route as an untested gap buries the modules
+  // that genuinely should have one.
+  '**/page.{ts,tsx,js,jsx}',
+  '**/layout.{ts,tsx,js,jsx}',
+  '**/loading.{ts,tsx,js,jsx}',
+  '**/error.{ts,tsx,js,jsx}',
+  '**/not-found.{ts,tsx,js,jsx}',
+  '**/template.{ts,tsx,js,jsx}',
+  '**/global-error.{ts,tsx}',
+  '**/middleware.{ts,js}',
+  '**/instrumentation*.{ts,js}',
+  '**/+page.{svelte,ts,js}',
+  '**/+layout.{svelte,ts,js}',
+  '**/urls.py',
+  '**/wsgi.py',
+  '**/asgi.py',
+  '**/settings.py',
 ].map(compilePattern);
 
 /**

@@ -45,6 +45,7 @@ export async function runReview(options: ReviewOptions): Promise<ReviewResult> {
       comparison?.newFindings ?? result.findings,
       comparison?.drift ?? null,
       scope,
+      baseline !== null,
     ),
     current: result,
     baseline,
@@ -89,14 +90,24 @@ export function determineStatus(
   findings: Finding[],
   drift: Record<MetricKey, number> | null,
   scope: ScopeResult | null,
+  hasBaseline = true,
 ): ReviewStatus {
-  const hasNewErrors = findings.some((finding) => finding.severity === 'error');
-  const overallDrop = drift ? -drift.overall : 0;
+  const hasErrors = findings.some((finding) => finding.severity === 'error');
+  const outOfScope = (scope?.outOfScope.length ?? 0) > 0;
 
-  if (hasNewErrors || overallDrop >= 5) return 'degraded';
+  // Without a baseline there is no drift to judge, and every pre-existing
+  // finding counts as "new" — which used to greet a healthy first run with
+  // NEEDS REVIEW. Report the state of the code instead of a change that
+  // cannot be measured yet.
+  if (!hasBaseline) {
+    if (hasErrors) return 'degraded';
+    return outOfScope ? 'needs-review' : 'healthy';
+  }
+
+  const overallDrop = drift ? -drift.overall : 0;
+  if (hasErrors || overallDrop >= 5) return 'degraded';
 
   const hasNewWarnings = findings.some((finding) => finding.severity === 'warning');
-  const outOfScope = (scope?.outOfScope.length ?? 0) > 0;
   if (hasNewWarnings || overallDrop > 0 || outOfScope) return 'needs-review';
 
   return 'healthy';

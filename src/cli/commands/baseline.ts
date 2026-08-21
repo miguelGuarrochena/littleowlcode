@@ -11,7 +11,8 @@ import {
 } from '../../baseline/baseline.js';
 import { appendHistory, latestEntries } from '../../baseline/history.js';
 import { colors, dim, icons } from '../../output/theme.js';
-import { heading, metricLine, countLabel } from '../../output/ui.js';
+import { heading, countLabel } from '../../output/ui.js';
+import { renderMetricComparison } from '../../output/report.js';
 import { printJson } from '../../output/json.js';
 import {
   cancelled,
@@ -55,12 +56,7 @@ export async function baselineCommand(options: BaselineOptions): Promise<number>
     if (existing.commit) print(`${dim('Commit')}   ${existing.commit.slice(0, 8)}`);
     if (existing.branch) print(`${dim('Branch')}   ${existing.branch}`);
     print('');
-    print(metricLine({ label: 'Overall', value: existing.metrics.overall }));
-    print(metricLine({ label: 'Architecture', value: existing.metrics.architecture }));
-    print(metricLine({ label: 'Maintainability', value: existing.metrics.maintainability }));
-    print(metricLine({ label: 'Complexity', value: existing.metrics.complexity }));
-    print(metricLine({ label: 'Dependencies', value: existing.metrics.dependencies }));
-    print(metricLine({ label: 'Type Safety', value: existing.metrics.typeSafety }));
+    for (const line of renderMetricComparison(existing.metrics, null)) print(line);
     print('');
     print(dim(`${countLabel(existing.findings.length, 'finding')} recorded at baseline time`));
     return 0;
@@ -81,48 +77,9 @@ export async function baselineCommand(options: BaselineOptions): Promise<number>
   print('');
   print(colors.bold('Current project health'));
   print('');
-  print(
-    metricLine({
-      label: 'Overall',
-      value: result.metrics.overall,
-      ...(existing ? { previous: existing.metrics.overall } : {}),
-    }),
-  );
-  print(
-    metricLine({
-      label: 'Architecture',
-      value: result.metrics.architecture,
-      ...(existing ? { previous: existing.metrics.architecture } : {}),
-    }),
-  );
-  print(
-    metricLine({
-      label: 'Maintainability',
-      value: result.metrics.maintainability,
-      ...(existing ? { previous: existing.metrics.maintainability } : {}),
-    }),
-  );
-  print(
-    metricLine({
-      label: 'Complexity',
-      value: result.metrics.complexity,
-      ...(existing ? { previous: existing.metrics.complexity } : {}),
-    }),
-  );
-  print(
-    metricLine({
-      label: 'Dependencies',
-      value: result.metrics.dependencies,
-      ...(existing ? { previous: existing.metrics.dependencies } : {}),
-    }),
-  );
-  print(
-    metricLine({
-      label: 'Type Safety',
-      value: result.metrics.typeSafety,
-      ...(existing ? { previous: existing.metrics.typeSafety } : {}),
-    }),
-  );
+  for (const line of renderMetricComparison(result.metrics, existing?.metrics ?? null)) {
+    print(line);
+  }
   print('');
 
   if (existing) {

@@ -41,28 +41,20 @@ const WATCH_IGNORED = [
  * baseline if there is one), so drift is measured from a fixed point rather
  * than from whatever the code looked like a second ago.
  */
-export async function watchCommand(options: WatchOptions): Promise<number> {
-  const root = resolveRoot(options);
-  const config = await loadConfig(root);
-  const cache = ParseCache.open(root);
+/** Mutable state a watch session carries between runs. */
+interface WatchSession {
+  /** The fixed point drift is measured from: the baseline, or the state at start-up. */
+  reference: Metrics;
+  /** Scores from the previous run, so a metric is only announced when it moves. */
+  previous: Metrics;
+  /** Findings already reported, so the same problem is not repeated on every keystroke. */
+  known: Set<string>;
+}
 
-  print('');
-  print(`${icons.owl} ${colors.bold('Little Owl is watching your codebase.')}`);
-  print('');
-
-  let reference = await analyzeProject({ root, config, cache });
-  const savedBaseline = readBaseline(root);
-  const referenceMetrics: Metrics = savedBaseline?.metrics ?? reference.result.metrics;
-  let knownFingerprints = new Set(
-    (savedBaseline?.findings ?? reference.result.findings).map((finding) => finding.fingerprint),
-  );
-  let lastMetrics = reference.result.metrics;
-
-  printHealthy(reference.result, referenceMetrics, savedBaseline !== null);
-  print(dim(`Watching ${reference.result.project.fileCount} files. Press Ctrl+C to stop.`));
-  print('');
-
+/** Watches the tree, filtering out anything that cannot change the analysis. */
+function createWatcher(root: string, onChange: (relative: string) => void) {
   const ignored = WATCH_IGNORED.map(compilePattern);
+
   const watcher = chokidar.watch(root, {
     ignoreInitial: true,
     ignored: (target) => {
@@ -72,31 +64,65 @@ export async function watchCommand(options: WatchOptions): Promise<number> {
     },
   });
 
-  const debounceMs = options.debounce ?? 400;
+  const handle = (file: string): void => {
+    const relative = toPosix(path.relative(root, file));
+    if (matchesCompiled(relative, ignored)) return;
+    if (!affectsAnalysis(relative)) return;
+    onChange(relative);
+  };
+
+  watcher.on('add', handle).on('change', handle).on('unlink', handle);
+  return watcher;
+}
+
+/** Resolves once the process is asked to stop, after cleaning up. */
+function untilStopped(cleanup: () => void): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const stop = (): void => {
+      cleanup();
+      print('');
+      print(dim(`${icons.owl} Stopped watching.`));
+      resolve();
+    };
+    process.on('SIGINT', stop);
+    process.on('SIGTERM', stop);
+  });
+}
+
+export async function watchCommand(options: WatchOptions): Promise<number> {
+  const root = resolveRoot(options);
+  const config = await loadConfig(root);
+  const cache = ParseCache.open(root);
+
+  print('');
+  print(`${icons.owl} ${colors.bold('Little Owl is watching your codebase.')}`);
+  print('');
+
+  const first = await analyzeProject({ root, config, cache });
+  const savedBaseline = readBaseline(root);
+
+  const session: WatchSession = {
+    reference: savedBaseline?.metrics ?? first.result.metrics,
+    previous: first.result.metrics,
+    known: new Set(
+      (savedBaseline?.findings ?? first.result.findings).map((finding) => finding.fingerprint),
+    ),
+  };
+
+  printHealthy(first.result, session.reference, savedBaseline !== null);
+  print(dim(`Watching ${first.result.project.fileCount} files. Press Ctrl+C to stop.`));
+  print('');
 
   const queue = createRunQueue(
-    debounceMs,
+    options.debounce ?? 400,
     async (touched) => {
       for (const file of touched) cache.invalidate(file);
 
       const next = await analyzeProject({ root, config, cache });
-      report(
-        touched,
-        next.result,
-        next.context.graph,
-        lastMetrics,
-        referenceMetrics,
-        knownFingerprints,
-        options,
-      );
-      lastMetrics = next.result.metrics;
-      // Findings that persist become part of what we already know about, so
-      // the same problem is not announced on every keystroke.
-      knownFingerprints = new Set([
-        ...knownFingerprints,
-        ...next.result.findings.map((finding) => finding.fingerprint),
-      ]);
-      reference = next;
+      report(touched, next.result, next.context.graph, session, options);
+
+      session.previous = next.result.metrics;
+      for (const finding of next.result.findings) session.known.add(finding.fingerprint);
     },
     (error) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -104,25 +130,11 @@ export async function watchCommand(options: WatchOptions): Promise<number> {
     },
   );
 
-  const schedule = (file: string): void => {
-    const relative = toPosix(path.relative(root, file));
-    if (matchesCompiled(relative, ignored)) return;
-    if (!affectsAnalysis(relative)) return;
-    queue.add(relative);
-  };
+  const watcher = createWatcher(root, (relative) => queue.add(relative));
 
-  watcher.on('add', schedule).on('change', schedule).on('unlink', schedule);
-
-  await new Promise<void>((resolve) => {
-    const stop = (): void => {
-      queue.stop();
-      void watcher.close();
-      print('');
-      print(dim(`${icons.owl} Stopped watching.`));
-      resolve();
-    };
-    process.on('SIGINT', stop);
-    process.on('SIGTERM', stop);
+  await untilStopped(() => {
+    queue.stop();
+    void watcher.close();
   });
 
   return 0;
@@ -214,11 +226,10 @@ function report(
   touched: string[],
   result: AnalysisResult,
   graph: DependencyGraph,
-  previous: Metrics,
-  reference: Metrics,
-  known: Set<string>,
+  session: WatchSession,
   options: WatchOptions,
 ): void {
+  const { reference, previous, known } = session;
   const fresh = result.findings.filter((finding) => !known.has(finding.fingerprint));
   const drifted = (Object.keys(reference) as Array<keyof Metrics>).filter(
     (key) => result.metrics[key] < reference[key] && result.metrics[key] !== previous[key],
