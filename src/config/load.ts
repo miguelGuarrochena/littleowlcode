@@ -65,11 +65,44 @@ const readConfigFile = async (file: string): Promise<LittleOwlConfig> => {
   }
 
   const jiti = createJiti(import.meta.url, { interopDefault: true });
-  const loaded = (await jiti.import(file, { default: true })) as LittleOwlConfig;
+
+  let loaded: LittleOwlConfig;
+  try {
+    loaded = (await jiti.import(file, { default: true })) as LittleOwlConfig;
+  } catch (error) {
+    throw new Error(describeConfigFailure(file, error));
+  }
+
   if (!loaded || typeof loaded !== 'object') {
     throw new Error(`Config at ${file} did not export an object.`);
   }
   return loaded;
+};
+
+/**
+ * Turns a module-resolution stack trace into something a reader can act on.
+ *
+ * The common case by far: the config was written by `init` run through `npx`,
+ * so it imports a package that was never installed into the project. A raw
+ * require stack does not tell anybody that.
+ */
+const describeConfigFailure = (file: string, error: unknown): string => {
+  const reason = error instanceof Error ? error.message : String(error);
+  const missing = /Cannot find module '([^']+)'/.exec(reason)?.[1];
+
+  if (missing === 'little-owl-code') {
+    return (
+      `${file} imports 'little-owl-code', which is not installed in this project.\n` +
+      '  Either install it — npm install -D little-owl-code — or drop the import and\n' +
+      '  export a plain object, which works the same and needs nothing installed.'
+    );
+  }
+
+  if (missing) {
+    return `${file} imports '${missing}', which could not be resolved from this project.`;
+  }
+
+  return `Could not load ${file}: ${reason}`;
 };
 
 /** Merges a user config on top of the strictness preset it selected. */

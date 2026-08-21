@@ -1,8 +1,8 @@
 {
   "version": "1",
-  "createdAt": "2026-08-21T16:26:58.836Z",
-  "commit": "83a8120979e05e7ab4e1d2888132b9548962b9ad",
-  "branch": "feat/completeness-pass",
+  "createdAt": "2026-08-21T17:50:44.701Z",
+  "commit": "b25a628c7b85aa8d6ed93c1df2b1a67da05c2fcd",
+  "branch": "main",
   "metrics": {
     "overall": 98,
     "architecture": 100,
@@ -13,8 +13,8 @@
   },
   "stats": {
     "files": 65,
-    "linesOfCode": 8581,
-    "functions": 703,
+    "linesOfCode": 8601,
+    "functions": 704,
     "cycles": 0,
     "layerViolations": 0,
     "layerSkips": 0,
@@ -369,7 +369,7 @@
       "maxComplexity": 11
     },
     "src/cli/commands/init.ts": {
-      "lines": 285,
+      "lines": 291,
       "sloc": 240,
       "functions": 18,
       "maxComplexity": 18
@@ -429,9 +429,9 @@
       "maxComplexity": 2
     },
     "src/config/load.ts": {
-      "lines": 144,
-      "sloc": 100,
-      "functions": 9,
+      "lines": 177,
+      "sloc": 120,
+      "functions": 10,
       "maxComplexity": 12
     },
     "src/config/schema.ts": {

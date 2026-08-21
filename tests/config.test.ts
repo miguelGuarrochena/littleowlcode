@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { TempProject } from './temp-project.js';
 import { loadConfig, resolveConfig, findConfigFile } from '../src/config/load.js';
@@ -229,5 +230,64 @@ describe('layer model', () => {
       [],
     );
     expect(classifyLayerDependency('ui', 'data', relaxed)).toBe('ok');
+  });
+});
+
+/**
+ * The documented way in is `npx little-owl-code`, which never installs the
+ * package into the project. A generated config that imports the package would
+ * therefore load on the maintainer's machine and nowhere else.
+ */
+describe('a generated config loads without the package installed', () => {
+  it('has no import statement at all', () => {
+    const written = renderConfigFile({ strictness: 'balanced', include: [], layers: {} });
+    // The comment mentions `defineConfig` as an opt-in, so match statements
+    // rather than the text — an active import is the thing that breaks.
+    const statements = written.split('\n').filter((line) => /^\s*import\s/.test(line));
+
+    expect(statements).toEqual([]);
+    expect(written).toContain('export default {');
+  });
+
+  it('is loadable straight after init, and every command still works', async () => {
+    const project = TempProject.create({
+      'package.json': '{"name":"npx-style"}',
+      'src/a.ts': 'export const a = 1;\n',
+    });
+
+    try {
+      // Exactly what `init` writes, in a project with no node_modules at all.
+      fs.mkdirSync(path.join(project.root, '.little-owl'), { recursive: true });
+      fs.writeFileSync(
+        path.join(project.root, '.little-owl', 'config.ts'),
+        renderConfigFile({ strictness: 'strict', include: ['src/**'], layers: {} }),
+      );
+
+      const config = await loadConfig(project.root);
+      expect(config.strictness).toBe('strict');
+      expect(config.include).toEqual(['src/**']);
+
+      const { result } = await analyzeProject({ root: project.root, config, cache: false });
+      expect(result.project.fileCount).toBe(1);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('explains an unresolvable import instead of dumping a require stack', async () => {
+    const project = TempProject.create({
+      'package.json': '{"name":"broken-config"}',
+      '.little-owl/config.ts':
+        "import { defineConfig } from 'little-owl-code';\nexport default defineConfig({});\n",
+      'src/a.ts': 'export const a = 1;\n',
+    });
+
+    try {
+      await expect(loadConfig(project.root)).rejects.toThrow(
+        /imports 'little-owl-code', which is not installed/,
+      );
+    } finally {
+      project.cleanup();
+    }
   });
 });

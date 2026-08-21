@@ -231,13 +231,19 @@ export const renderConfigFile = (template: ConfigTemplate): string => {
   const defaults = baseConfig(template.strictness);
   const layerEntries = Object.entries(template.layers).filter(([, dirs]) => dirs.length > 0);
 
-  return `import { defineConfig } from 'little-owl-code';
-
-/**
+  // No import of `defineConfig` here. The documented way in is `npx
+  // little-owl-code`, which never installs the package into the project, so an
+  // import would leave every later command unable to load this file.
+  return `/**
  * Little Owl Code configuration.
- * Docs: https://littleowlcode.com
+ * Docs: https://littleowlcode.com/docs/configuration
+ *
+ * Installing the package as a dev dependency gets you type checking here:
+ *
+ *   import { defineConfig } from 'little-owl-code';
+ *   export default defineConfig({ ... });
  */
-export default defineConfig({
+export default {
   strictness: '${template.strictness}',
 ${template.include.length > 0 ? `\n  // Only these paths are analysed.\n  include: ${JSON.stringify(template.include, null, 2).replace(/\n/g, '\n  ')},\n` : ''}
   architecture: {
@@ -268,7 +274,7 @@ ${layerEntries.map(([layer, dirs]) => `      ${layer}: ${JSON.stringify(dirs)},`
     failOn: 'error',
     maxOverallDrop: ${defaults.ci.maxOverallDrop},
   },
-});
+};
 `;
 };
 
