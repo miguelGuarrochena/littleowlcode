@@ -293,6 +293,28 @@ describe('prompt generation', () => {
     expect(prompt).toContain('nothing that needs fixing');
   });
 
+  it('does not spend places on the same sentence twice', () => {
+    // Three skipped-layer imports in one file are three findings but one
+    // instruction; repeating it wastes the brief's cap on a single problem.
+    const sameFile = (line: number): Finding => ({
+      id: 'architecture/layer-skip',
+      fingerprint: `skip-${line}`,
+      severity: 'warning',
+      category: 'architecture',
+      file: 'src/app/panel/page.tsx',
+      line,
+      title: 'ui imports infrastructure directly',
+      message: 'skips a layer',
+      detail: ['found:    ui -> infrastructure', 'expected: ui -> application -> infrastructure'],
+    });
+
+    const text = generatePrompt(reviewWith([sameFile(17), sameFile(18), sameFile(22)]));
+    const numbered = text.split('\n').filter((line) => /^\d+\. /.test(line));
+    const layering = numbered.filter((line) => line.includes('Restore the layering'));
+
+    expect(layering).toHaveLength(1);
+  });
+
   it('caps the number of instructions', () => {
     const many: Finding[] = Array.from({ length: 20 }, (_, index) => ({
       id: 'complexity/large-file',

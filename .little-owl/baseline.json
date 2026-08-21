@@ -1,7 +1,7 @@
 {
   "version": "1",
-  "createdAt": "2026-08-21T19:45:11.691Z",
-  "commit": "fba7cf6dfba280695d93e73ae556a83e161761a0",
+  "createdAt": "2026-08-21T20:04:46.572Z",
+  "commit": "26f79903b6a6190dea6e18db0ebbeba47a9664ef",
   "branch": "main",
   "metrics": {
     "overall": 98,
@@ -13,8 +13,8 @@
   },
   "stats": {
     "files": 65,
-    "linesOfCode": 8596,
-    "functions": 704,
+    "linesOfCode": 8605,
+    "functions": 703,
     "cycles": 0,
     "layerViolations": 0,
     "layerSkips": 0,
@@ -192,11 +192,11 @@
     },
     {
       "id": "complexity/high-complexity",
-      "fingerprint": "7bb2992ce7be",
+      "fingerprint": "fe291e952d1f",
       "severity": "warning",
       "category": "complexity",
       "file": "src/prompts/generate.ts",
-      "line": 66,
+      "line": 79,
       "title": "instructionFor() has a complexity of 19",
       "message": "instructionFor() contains 19 independent branches (limit 15). Every branch is another path a change can break and another case tests must cover.",
       "suggestion": "Flatten early returns, or move each branch group into its own function.",
@@ -585,9 +585,9 @@
       "maxComplexity": 8
     },
     "src/prompts/generate.ts": {
-      "lines": 97,
-      "sloc": 74,
-      "functions": 5,
+      "lines": 110,
+      "sloc": 83,
+      "functions": 4,
       "maxComplexity": 19
     },
     "src/review/archaeology.ts": {

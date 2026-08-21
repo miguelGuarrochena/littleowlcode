@@ -25,9 +25,22 @@ export const generatePrompt = (review: ReviewResult, options: PromptOptions = {}
       ? review.newFindings
       : review.current.findings;
 
-  const ranked = pool.filter((finding) => finding.severity !== 'info').slice(0, maxInstructions);
+  // Several findings can produce the same sentence — three skipped-layer
+  // imports in one file are three findings and one instruction. Deduplicating
+  // before the cap means the brief spends its places on distinct problems.
+  const ranked: string[] = [];
+  const seen = new Set<string>();
 
-  const instructions = ranked.map(instructionFor);
+  for (const finding of pool) {
+    if (finding.severity === 'info') continue;
+    const instruction = instructionFor(finding);
+    if (seen.has(instruction)) continue;
+    seen.add(instruction);
+    ranked.push(instruction);
+    if (ranked.length >= maxInstructions) break;
+  }
+
+  const instructions = [...ranked];
   const scope = options.scope ?? review.scope?.patterns ?? [];
 
   if (scope.length > 0) {
