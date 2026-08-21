@@ -301,6 +301,43 @@ describe('cli', () => {
     expect(json.metrics.overall).toBeGreaterThan(0);
   });
 
+  it('keeps its own cache out of git even without init', () => {
+    // The cache used to land in a directory with no ignore file unless `init`
+    // had been run, which is how a cache fixture reached this repository.
+    project = TempProject.create(CLEAN_PROJECT);
+
+    const result = run(['check'], project.root);
+    expect(result.status).toBe(0);
+    expect(fs.existsSync(project.path('.little-owl/cache/parse.json'))).toBe(true);
+
+    const ignored = fs.readFileSync(project.path('.little-owl/.gitignore'), 'utf8');
+    expect(ignored).toContain('cache/');
+    expect(ignored).toContain('history.json');
+  });
+
+  it('agrees with its own rule about unused dependencies', () => {
+    project = TempProject.create({
+      ...CLEAN_PROJECT,
+      'package.json': JSON.stringify({
+        name: 'cli-fixture',
+        dependencies: { lodash: '^4.0.0' },
+        devDependencies: { eslint: '^9.0.0', prettier: '^3.0.0' },
+      }),
+    });
+
+    const report = run(['dependencies'], project.root).stdout;
+    const check = JSON.parse(run(['check', '--json'], project.root).stdout) as {
+      findings: Array<{ id: string; detail?: string[] }>;
+    };
+    const finding = check.findings.find((entry) => entry.id === 'dependencies/unused-dependency');
+
+    expect(report).toContain('lodash');
+    expect(finding?.detail).toEqual(['lodash']);
+    // Build tooling is not imported and must not be called unused by either.
+    expect(report).not.toContain('eslint');
+    expect(report).not.toContain('prettier');
+  });
+
   it('falls back to check when run non-interactively with no command', () => {
     project = TempProject.create(CLEAN_PROJECT);
     const result = run([], project.root);

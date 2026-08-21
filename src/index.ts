@@ -11,7 +11,7 @@ export { ParseCache } from './core/cache.js';
 export { computeMetrics, computeStats, fileMetricsOf } from './core/metrics.js';
 export { sortFindings, createFinding, severityOf, isEnabled } from './core/context.js';
 export type { AnalysisContext, Rule, NewFinding } from './core/context.js';
-export { scanFiles, languageOf, SOURCE_EXTENSIONS } from './core/scan.js';
+export { scanFiles, languageOf, SOURCE_EXTENSIONS, MAX_SCANNED_FILES } from './core/scan.js';
 
 export { defineConfig } from './config/schema.js';
 export type {
@@ -23,12 +23,25 @@ export type {
   Strictness,
   Thresholds,
 } from './config/schema.js';
-export { loadConfig, resolveConfig, findConfigFile, CONFIG_DIR } from './config/load.js';
+export {
+  loadConfig,
+  resolveConfig,
+  findConfigFile,
+  ensureLocalGitignore,
+  CONFIG_DIR,
+} from './config/load.js';
 export { DEFAULT_IGNORE, THRESHOLD_PRESETS, DEFAULT_RULE_SEVERITIES } from './config/defaults.js';
 
 export { detectProject, describeStack } from './detect/project.js';
+export {
+  isImplicitlyUsed,
+  isNodeBuiltin,
+  undeclaredPackages,
+  unusedDependencies,
+} from './detect/dependencies.js';
 export { DependencyGraph, buildDependencyGraph } from './graph/dependency-graph.js';
 export { findCycles } from './graph/cycles.js';
+export { stronglyConnectedComponents } from './graph/scc.js';
 export type { Cycle } from './graph/cycles.js';
 export { createResolverContext } from './graph/resolve.js';
 export {

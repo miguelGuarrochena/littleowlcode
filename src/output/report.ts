@@ -18,7 +18,13 @@ import {
   statusText,
 } from './theme.js';
 import { box, countLabel, heading, indent, metricLine, rule, scoreBar, wrap } from './ui.js';
+import { MAX_SCANNED_FILES } from '../core/scan.js';
 import { describeStack } from '../detect/project.js';
+import {
+  isImplicitlyUsed,
+  undeclaredPackages,
+  unusedDependencies,
+} from '../detect/dependencies.js';
 import { describeLayerChain, layerOf } from '../architecture/layers.js';
 import { explainDrift } from '../baseline/baseline.js';
 import { groupByArea } from '../review/scope.js';
@@ -58,6 +64,22 @@ export function renderProjectSummary(project: ProjectInfo): string {
   return lines.join('\n');
 }
 
+/**
+ * A banner for a partial analysis.
+ *
+ * Every number in a truncated run describes part of the repository, so it has
+ * to be said out loud rather than left for the reader to work out.
+ */
+export function renderTruncationNotice(): string {
+  return [
+    colors.yellow(
+      `${icons.warn} Only the first ${MAX_SCANNED_FILES.toLocaleString()} source files were scanned.`,
+    ),
+    dim('   This report covers part of the repository, not all of it. Narrow the analysis'),
+    dim('   with `include` or `ignore` in .little-owl/config.ts for numbers you can compare.'),
+  ].join('\n');
+}
+
 export function renderHealth(result: AnalysisResult, options: RenderOptions = {}): string {
   const counts = countBySeverity(result.findings);
   const sections: string[] = [
@@ -73,10 +95,24 @@ export function renderHealth(result: AnalysisResult, options: RenderOptions = {}
     renderCounts(counts, result.findings.length),
   ];
 
+  if (result.truncated) sections.push('', renderTruncationNotice());
+
   const findings = renderFindings(result.findings, options);
   if (findings) sections.push('', findings);
 
   return sections.join('\n');
+}
+
+/** Every score, with the baseline value alongside it when there is one. */
+function renderMetricComparison(current: Metrics, baseline: Metrics | null): string[] {
+  const line = (label: string, key: keyof Metrics): string =>
+    metricLine({
+      label,
+      value: current[key],
+      ...(baseline ? { previous: baseline[key] } : {}),
+    });
+
+  return [...METRIC_LABELS.map(([key, label]) => line(label, key)), line('Overall', 'overall')];
 }
 
 export function renderReview(review: ReviewResult, options: RenderOptions = {}): string {
@@ -103,22 +139,7 @@ export function renderReview(review: ReviewResult, options: RenderOptions = {}):
     '',
   );
 
-  for (const [key, label] of METRIC_LABELS) {
-    sections.push(
-      metricLine({
-        label,
-        value: current.metrics[key],
-        ...(baseline ? { previous: baseline.metrics[key] } : {}),
-      }),
-    );
-  }
-  sections.push(
-    metricLine({
-      label: 'Overall',
-      value: current.metrics.overall,
-      ...(baseline ? { previous: baseline.metrics.overall } : {}),
-    }),
-  );
+  sections.push(...renderMetricComparison(current.metrics, baseline?.metrics ?? null));
 
   if (baseline) {
     const reasons = explainDrift(baseline, current);
@@ -145,6 +166,8 @@ export function renderReview(review: ReviewResult, options: RenderOptions = {}):
   if (scope && scope.outOfScope.length > 0) {
     sections.push('', renderScope(scope.patterns, scope.outOfScope));
   }
+
+  if (current.truncated) sections.push('', renderTruncationNotice());
 
   const findings = renderFindings(shown, options);
   if (findings) sections.push('', findings);
@@ -425,17 +448,21 @@ export function renderImpact(report: ImpactReport): string {
 }
 
 export function renderDependencies(context: AnalysisContext): string {
-  const packages = [...context.graph.externalPackages()].sort();
+  const imported = context.graph.externalPackages();
+  const packages = [...imported].sort();
   const declared = {
     ...context.project.dependencies,
     ...context.project.devDependencies,
   };
   const declaredNames = Object.keys(declared).sort();
 
-  const undeclared = packages.filter(
-    (name) => !name.startsWith('node:') && !(name in declared) && !isBuiltin(name),
-  );
-  const unused = declaredNames.filter((name) => !packages.includes(name));
+  // Same helpers the `unused-dependency` rule uses, so the command and the
+  // finding can never disagree about the same package.
+  const undeclared = undeclaredPackages(packages, declared);
+  const unused = unusedDependencies(declared, imported);
+  const implicit = declaredNames.filter(
+    (name) => !imported.has(name) && isImplicitlyUsed(name),
+  ).length;
 
   const lines = [
     heading('DEPENDENCIES'),
@@ -461,6 +488,16 @@ export function renderDependencies(context: AnalysisContext): string {
     lines.push(colors.green(`${icons.ok} Declared and imported dependencies line up.`));
   }
 
+  if (implicit > 0) {
+    lines.push(
+      '',
+      dim(
+        `${implicit} package${implicit === 1 ? '' : 's'} (type definitions, linters, build tooling) do their job`,
+      ),
+      dim('without being imported and are not counted above.'),
+    );
+  }
+
   lines.push(
     '',
     dim('Little Owl checks dependency hygiene, not security. For vulnerabilities run your'),
@@ -468,41 +505,6 @@ export function renderDependencies(context: AnalysisContext): string {
   );
 
   return lines.join('\n');
-}
-
-const NODE_BUILTINS = new Set([
-  'fs',
-  'path',
-  'os',
-  'url',
-  'util',
-  'events',
-  'stream',
-  'crypto',
-  'http',
-  'https',
-  'child_process',
-  'assert',
-  'buffer',
-  'zlib',
-  'net',
-  'tls',
-  'dns',
-  'readline',
-  'worker_threads',
-  'perf_hooks',
-  'string_decoder',
-  'querystring',
-  'timers',
-  'tty',
-  'v8',
-  'vm',
-  'process',
-  'module',
-]);
-
-function isBuiltin(name: string): boolean {
-  return NODE_BUILTINS.has(name);
 }
 
 export function renderOwlLine(message: string, tone: 'good' | 'warn' | 'bad' = 'good'): string {

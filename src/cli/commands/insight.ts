@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { analyzeProject } from '../../core/analyze.js';
+import { MAX_SCANNED_FILES } from '../../core/scan.js';
 import { loadConfig } from '../../config/load.js';
 import { detectChanges } from '../../git/git.js';
 import { findDeadCode, type Confidence } from '../../review/dead-code.js';
@@ -197,8 +198,11 @@ export async function doctorCommand(options: InsightOptions): Promise<number> {
 
   checks.push({
     name: 'Files analysed',
-    status: result.project.fileCount > 0 ? 'ok' : 'warn',
-    detail: `${result.project.fileCount} files in ${elapsed}ms`,
+    status: result.truncated ? 'warn' : result.project.fileCount > 0 ? 'ok' : 'warn',
+    detail: result.truncated
+      ? `${result.project.fileCount} files in ${elapsed}ms — the scan limit of ` +
+        `${MAX_SCANNED_FILES.toLocaleString()} was reached, so this project is only partly analysed`
+      : `${result.project.fileCount} files in ${elapsed}ms`,
   });
 
   const unresolved = context.graph.unresolved.length;
@@ -237,7 +241,12 @@ export async function doctorCommand(options: InsightOptions): Promise<number> {
   }
 
   if (options.json) {
-    printJson({ checks, warnings: result.warnings, durationMs: elapsed });
+    printJson({
+      checks,
+      warnings: result.warnings,
+      truncated: result.truncated,
+      durationMs: elapsed,
+    });
     return 0;
   }
 

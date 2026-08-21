@@ -1,30 +1,7 @@
 import type { Finding } from '../core/types.js';
 import { createFinding, type AnalysisContext, type Rule } from '../core/context.js';
 import { readFileAtRef } from '../git/git.js';
-
-/**
- * Packages that legitimately never appear in an import statement: type-only
- * packages, build tooling and framework CLIs.
- */
-const IMPLICITLY_USED = [
-  /^@types\//,
-  /^eslint/,
-  /^@eslint\//,
-  /^prettier/,
-  /^postcss/,
-  /^tailwindcss$/,
-  /^autoprefixer$/,
-  /^typescript$/,
-  /^tsx$/,
-  /^tsup$/,
-  /^vite$/,
-  /^vitest$/,
-  /^jest$/,
-  /^husky$/,
-  /^lint-staged$/,
-  /^sharp$/,
-  /^encoding$/,
-];
+import { unusedDependencies } from '../detect/dependencies.js';
 
 function baseManifest(context: AnalysisContext): Record<string, string> | null {
   const base = context.changes?.base;
@@ -119,12 +96,11 @@ const unusedDependency: Rule = {
   category: 'dependencies',
   description: 'Declared runtime dependencies that are never imported.',
   run(context) {
-    const imported = context.graph.externalPackages();
     const findings: Finding[] = [];
-    const unused = Object.keys(context.project.dependencies)
-      .filter((name) => !imported.has(name))
-      .filter((name) => !IMPLICITLY_USED.some((pattern) => pattern.test(name)))
-      .sort();
+    const unused = unusedDependencies(
+      context.project.dependencies,
+      context.graph.externalPackages(),
+    );
 
     if (unused.length === 0) return findings;
 

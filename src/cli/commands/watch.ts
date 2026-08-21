@@ -8,11 +8,13 @@ import { readBaseline } from '../../baseline/baseline.js';
 import { generatePrompt } from '../../prompts/generate.js';
 import { renderFinding } from '../../output/report.js';
 import { colors, dim, icons } from '../../output/theme.js';
-import { metricLine, rule } from '../../output/ui.js';
+import { countLabel, metricLine, rule } from '../../output/ui.js';
 import { basename, toPosix } from '../../utils/paths.js';
 import { compilePattern, matchesCompiled } from '../../utils/glob.js';
 import { print, resolveRoot, type GlobalOptions } from '../runtime.js';
+import { attributeFindings, createRunQueue, type AttributedFindings } from '../watch-runtime.js';
 import type { AnalysisResult, Finding, Metrics } from '../../core/types.js';
+import type { DependencyGraph } from '../../graph/dependency-graph.js';
 
 export interface WatchOptions extends GlobalOptions {
   debounce?: number;
@@ -71,21 +73,22 @@ export async function watchCommand(options: WatchOptions): Promise<number> {
   });
 
   const debounceMs = options.debounce ?? 400;
-  let timer: NodeJS.Timeout | null = null;
-  const pending = new Set<string>();
-  let running = false;
 
-  const run = async (): Promise<void> => {
-    if (running) return;
-    running = true;
-    const touched = [...pending].sort();
-    pending.clear();
+  const queue = createRunQueue(
+    debounceMs,
+    async (touched) => {
+      for (const file of touched) cache.invalidate(file);
 
-    for (const file of touched) cache.invalidate(file);
-
-    try {
       const next = await analyzeProject({ root, config, cache });
-      report(touched, next.result, lastMetrics, referenceMetrics, knownFingerprints, options);
+      report(
+        touched,
+        next.result,
+        next.context.graph,
+        lastMetrics,
+        referenceMetrics,
+        knownFingerprints,
+        options,
+      );
       lastMetrics = next.result.metrics;
       // Findings that persist become part of what we already know about, so
       // the same problem is not announced on every keystroke.
@@ -94,26 +97,25 @@ export async function watchCommand(options: WatchOptions): Promise<number> {
         ...next.result.findings.map((finding) => finding.fingerprint),
       ]);
       reference = next;
-    } catch (error) {
-      print(colors.red(`${icons.error} Analysis failed: ${(error as Error).message}`));
-    } finally {
-      running = false;
-    }
-  };
+    },
+    (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      print(colors.red(`${icons.error} Analysis failed: ${message}`));
+    },
+  );
 
   const schedule = (file: string): void => {
     const relative = toPosix(path.relative(root, file));
     if (matchesCompiled(relative, ignored)) return;
     if (!affectsAnalysis(relative)) return;
-    pending.add(relative);
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => void run(), debounceMs);
+    queue.add(relative);
   };
 
   watcher.on('add', schedule).on('change', schedule).on('unlink', schedule);
 
   await new Promise<void>((resolve) => {
     const stop = (): void => {
+      queue.stop();
       void watcher.close();
       print('');
       print(dim(`${icons.owl} Stopped watching.`));
@@ -159,9 +161,59 @@ function printHealthy(result: AnalysisResult, reference: Metrics, hasBaseline: b
   );
 }
 
+/** The files that were saved, and how far their imports reach. */
+function printChangeHeader(touched: string[], attributed: AttributedFindings): void {
+  print(colors.bold('Changed'));
+  for (const file of touched.slice(0, 5)) print(`  ${file}`);
+  if (touched.length > 5) print(dim(`  ... and ${touched.length - 5} more`));
+
+  const affected = attributed.affectedFiles.length;
+  if (affected > 0) {
+    print(dim(`  ${countLabel(affected, 'file')} import this, directly or indirectly`));
+  }
+  print('');
+}
+
+function printDrift(drifted: Array<keyof Metrics>, current: Metrics, reference: Metrics): void {
+  for (const key of drifted) {
+    print(
+      metricLine({
+        label: key === 'typeSafety' ? 'Type Safety' : key[0]!.toUpperCase() + key.slice(1),
+        value: current[key],
+        previous: reference[key],
+      }),
+    );
+  }
+}
+
+/**
+ * Findings under a heading that says how they relate to the edit.
+ *
+ * Listing an unrelated file's problem beneath the file that was just saved
+ * would be a claim the developer has no way to check.
+ */
+function printGroup(label: string, findings: Finding[]): void {
+  if (findings.length === 0) return;
+
+  print('');
+  print(rule());
+  print('');
+  print(colors.bold(label));
+  print('');
+
+  for (const finding of findings.slice(0, 3)) {
+    print(renderFinding(finding, false));
+    print('');
+  }
+  if (findings.length > 3) {
+    print(dim(`${findings.length - 3} more — run \`little-owl check --details\`.`));
+  }
+}
+
 function report(
   touched: string[],
   result: AnalysisResult,
+  graph: DependencyGraph,
   previous: Metrics,
   reference: Metrics,
   known: Set<string>,
@@ -178,39 +230,31 @@ function report(
     return;
   }
 
+  const attributed = attributeFindings(touched, fresh, graph);
+  const fromChange = [...attributed.inChange, ...attributed.inAffected];
+  const causedByChange = fromChange.length > 0 || drifted.length > 0;
+
   print('');
-  print(colors.yellow(`${icons.warn} CODEBASE DRIFT DETECTED`));
-  print('');
-  for (const file of touched.slice(0, 5)) print(`  ${colors.bold(file)}`);
+  print(
+    colors.yellow(
+      causedByChange
+        ? `${icons.warn} CODEBASE DRIFT DETECTED`
+        : `${icons.warn} NEW FINDINGS ELSEWHERE IN THE PROJECT`,
+    ),
+  );
   print('');
 
-  for (const key of drifted) {
-    print(
-      metricLine({
-        label: key === 'typeSafety' ? 'Type Safety' : key[0]!.toUpperCase() + key.slice(1),
-        value: result.metrics[key],
-        previous: reference[key],
-      }),
-    );
-  }
+  printChangeHeader(touched, attributed);
+  printDrift(drifted, result.metrics, reference);
+  printGroup('In the files you changed', attributed.inChange);
+  printGroup('In files that depend on the change', attributed.inAffected);
+  printGroup('Elsewhere in the project, not caused by this change', attributed.elsewhere);
 
-  if (fresh.length > 0) {
+  if (options.prompt && fromChange.length > 0) {
     print('');
-    print(rule());
+    print(dim('Prompt for your assistant:'));
     print('');
-    for (const finding of fresh.slice(0, 3)) {
-      print(renderFinding(finding, false));
-      print('');
-    }
-    if (fresh.length > 3)
-      print(dim(`${fresh.length - 3} more — run \`little-owl check --details\`.`));
-
-    if (options.prompt) {
-      print('');
-      print(dim('Prompt for your assistant:'));
-      print('');
-      print(promptFor(fresh));
-    }
+    print(promptFor(fromChange));
   }
   print('');
 }
@@ -233,6 +277,7 @@ function promptFor(findings: Finding[]): string {
         fileMetrics: {},
         project: {} as never,
         warnings: [],
+        truncated: false,
         durationMs: 0,
       },
       baseline: null,

@@ -87,7 +87,6 @@ export const DEFAULT_RULE_SEVERITIES: Record<string, Severity> = {
   'type-safety/unsafe-assertion': 'info',
   'type-safety/js-in-ts-project': 'info',
 
-  'react/large-component': 'warning',
   'react/effect-dependency-risk': 'info',
   'next/server-import-in-client': 'error',
 

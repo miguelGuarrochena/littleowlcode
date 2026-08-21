@@ -14,6 +14,7 @@ import { allRules } from '../rules/index.js';
 import { computeMetrics, computeStats, fileMetricsOf } from './metrics.js';
 import { sortFindings, type AnalysisContext } from './context.js';
 import { ParseCache } from './cache.js';
+import { hashContent } from '../utils/hash.js';
 
 export type ProgressStep =
   | 'reading-project'
@@ -30,8 +31,8 @@ export interface AnalyzeOptions {
   changes?: ChangeSet | null;
   cache?: ParseCache | false;
   onProgress?: (step: ProgressStep) => void;
-  /** Only run these rule ids. Used by watch mode for quick re-checks. */
-  onlyRules?: string[];
+  /** Cap on files scanned. Defaults to the scanner's own limit. */
+  maxFiles?: number;
 }
 
 export interface Analysis {
@@ -47,7 +48,11 @@ export async function analyzeProject(options: AnalyzeOptions): Promise<Analysis>
 
   notify('reading-project');
   const config = options.config ?? (await loadConfig(root));
-  const { files: relativePaths } = scanFiles(root, config);
+  const { files: relativePaths, truncated } = scanFiles(
+    root,
+    config,
+    options.maxFiles === undefined ? {} : { maxFiles: options.maxFiles },
+  );
 
   notify('parsing');
   const cache =
@@ -78,12 +83,8 @@ export async function analyzeProject(options: AnalyzeOptions): Promise<Analysis>
   };
 
   notify('running-rules');
-  const rules = options.onlyRules
-    ? allRules.filter((rule) => options.onlyRules!.includes(rule.id))
-    : allRules;
-
   const findings: Finding[] = [];
-  for (const rule of rules) {
+  for (const rule of allRules) {
     try {
       findings.push(...rule.run(context));
     } catch (error) {
@@ -108,6 +109,7 @@ export async function analyzeProject(options: AnalyzeOptions): Promise<Analysis>
       fileMetrics: fileMetricsOf(files),
       project,
       warnings,
+      truncated,
       durationMs: Date.now() - started,
     },
   };
@@ -148,6 +150,16 @@ function parseAll(
       content = fs.readFileSync(absolute, 'utf8');
     } catch {
       warnings.push({ file: relative, message: 'could not be read' });
+      continue;
+    }
+
+    // The file looks changed, but a rewritten mtime is not a rewritten file.
+    // Comparing the content hash against the stale entry costs one hash and
+    // saves a full parse after a checkout, a rebase or a formatter run.
+    const stale = cache.peek(relative);
+    if (stale && stale.hash === hashContent(content)) {
+      cache.set(relative, stats, stale);
+      files.push({ ...stale, absPath: absolute });
       continue;
     }
 

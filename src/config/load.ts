@@ -100,7 +100,46 @@ export function configDir(root: string): string {
 }
 
 export function ensureConfigDir(root: string): string {
-  const dir = configDir(root);
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
+  ensureLocalGitignore(root);
+  return configDir(root);
+}
+
+/** Entries inside `.little-owl/` that are local state, not project source. */
+const LOCAL_ONLY = ['cache/', 'history.json'];
+
+/**
+ * Keeps Little Owl's local state out of version control.
+ *
+ * The config and the baseline are meant to be committed — they are the team's
+ * agreement about the project. The parse cache and the review log are machine
+ * state, and a cache file that lands in a pull request is noise at best. This
+ * runs whenever anything under `.little-owl/` is written, so the protection
+ * does not depend on the developer having run `init` first.
+ *
+ * An existing file is never rewritten, only extended with entries it lacks.
+ */
+export function ensureLocalGitignore(root: string): void {
+  const directory = configDir(root);
+  const file = path.join(directory, '.gitignore');
+
+  try {
+    fs.mkdirSync(directory, { recursive: true });
+    const existing = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+    if (existing === null) {
+      fs.writeFileSync(file, `${LOCAL_ONLY.join('\n')}\n`);
+      return;
+    }
+
+    const lines = existing.split('\n').map((line) => line.trim());
+    const missing = LOCAL_ONLY.filter(
+      (entry) => !lines.includes(entry) && !lines.includes(entry.replace(/\/$/, '')),
+    );
+    if (missing.length === 0) return;
+
+    const separator = existing.endsWith('\n') || existing.length === 0 ? '' : '\n';
+    fs.appendFileSync(file, `${separator}${missing.join('\n')}\n`);
+  } catch {
+    // Not being able to write the ignore file is a tidiness problem, never a
+    // correctness one. The analysis carries on either way.
+  }
 }

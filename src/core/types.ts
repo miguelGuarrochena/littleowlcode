@@ -215,6 +215,11 @@ export interface AnalysisResult {
   project: ProjectInfo;
   /** Files that were skipped. The analysis continues without them. */
   warnings: AnalysisWarning[];
+  /**
+   * True when the project has more source files than one run will scan, so
+   * every number here describes part of the repository rather than all of it.
+   */
+  truncated: boolean;
   durationMs: number;
 }
 

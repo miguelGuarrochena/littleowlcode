@@ -124,7 +124,8 @@ describe('thin wrappers', () => {
     project = TempProject.create({
       'package.json': '{"name":"t"}',
       'src/core.ts': 'export function work(n: number) {\n  if (n) return n;\n  return 0;\n}\n',
-      'src/wrapper.ts': "import { work } from './core';\n\nexport const doWork = (n: number) => work(n);\n",
+      'src/wrapper.ts':
+        "import { work } from './core';\n\nexport const doWork = (n: number) => work(n);\n",
       'src/app.ts': "import { doWork } from './wrapper';\nexport const run = () => doWork(1);\n",
     });
 
@@ -181,8 +182,11 @@ describe('abstraction growth', () => {
     const imports: string[] = [];
 
     for (let index = 0; index < 9; index += 1) {
-      const body = Array.from({ length: 40 }, (_, line) => `  const v${line} = ${line};`).join('\n');
-      files[`src/services/s${index}.ts`] = `export function s${index}(n: number) {\n${body}\n  return n;\n}\n`;
+      const body = Array.from({ length: 40 }, (_, line) => `  const v${line} = ${line};`).join(
+        '\n',
+      );
+      files[`src/services/s${index}.ts`] =
+        `export function s${index}(n: number) {\n${body}\n  return n;\n}\n`;
       imports.push(`import { s${index} } from './services/s${index}';`);
     }
     files['src/app.ts'] = `${imports.join('\n')}\nexport const run = () => s0(1);\n`;

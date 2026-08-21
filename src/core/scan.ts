@@ -48,6 +48,13 @@ const HARD_SKIP = new Set([
   '.vscode',
 ]);
 
+/**
+ * Cap on files scanned in one run. It exists so that pointing Little Owl at a
+ * home directory by mistake cannot run for an hour. Reaching it is reported,
+ * never silently absorbed.
+ */
+export const MAX_SCANNED_FILES = 20_000;
+
 export interface ScanOptions {
   /** Cap on files scanned; protects against accidentally huge trees. */
   maxFiles?: number;
@@ -68,7 +75,7 @@ export function scanFiles(
   config: ResolvedConfig,
   options: ScanOptions = {},
 ): ScanResult {
-  const maxFiles = options.maxFiles ?? 20_000;
+  const maxFiles = options.maxFiles ?? MAX_SCANNED_FILES;
   const ignore = [...config.ignore, ...readGitignore(root)].map(compilePattern);
   const include = config.include.map(compilePattern);
   const files: string[] = [];

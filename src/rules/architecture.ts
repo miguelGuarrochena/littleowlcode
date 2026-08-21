@@ -1,5 +1,5 @@
 import type { Finding } from '../core/types.js';
-import { createFinding, type AnalysisContext, type Rule } from '../core/context.js';
+import { createFinding, isEnabled, type AnalysisContext, type Rule } from '../core/context.js';
 import { classifyLayerDependency, featureOf, layerOf } from '../architecture/layers.js';
 import { compilePattern, matchesCompiled } from '../utils/glob.js';
 
@@ -191,6 +191,10 @@ const deepImportChain: Rule = {
   category: 'architecture',
   description: 'Modules sitting at the bottom of a very long import chain.',
   run(context) {
+    // Measuring depth means walking the whole graph. A rule that is switched
+    // off should not pay for an answer nobody will read.
+    if (!isEnabled(this.id, context.config)) return [];
+
     const limit = context.config.thresholds.maxImportDepth;
     const findings: Finding[] = [];
 

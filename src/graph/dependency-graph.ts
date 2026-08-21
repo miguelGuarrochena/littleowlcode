@@ -1,4 +1,5 @@
 import type { DependencyEdge, ParsedFile } from '../core/types.js';
+import { stronglyConnectedComponents } from './scc.js';
 import {
   packageNameOf,
   resolveGoImport,
@@ -26,8 +27,12 @@ export class DependencyGraph {
 
   private readonly out = new Map<string, Set<string>>();
   private readonly in = new Map<string, Set<string>>();
+  /** Import depth per node, computed lazily and dropped whenever an edge is added. */
+  private depthCache: Map<string, number> | null = null;
 
   addNode(file: string): void {
+    if (this.out.has(file) && this.in.has(file)) return;
+    this.depthCache = null;
     if (!this.out.has(file)) this.out.set(file, new Set());
     if (!this.in.has(file)) this.in.set(file, new Set());
   }
@@ -37,6 +42,7 @@ export class DependencyGraph {
     this.addNode(edge.from);
     this.addNode(edge.to);
     if (this.out.get(edge.from)!.has(edge.to)) return;
+    this.depthCache = null;
     this.out.get(edge.from)!.add(edge.to);
     this.in.get(edge.to)!.add(edge.from);
     this.edges.push(edge);
@@ -95,16 +101,64 @@ export class DependencyGraph {
     return distances;
   }
 
-  /** Longest chain of imports starting at `file`, capped to stay linear-ish. */
-  maxDepthFrom(file: string, seen = new Set<string>()): number {
-    if (seen.has(file)) return 0;
-    seen.add(file);
-    let deepest = 0;
-    for (const dependency of this.dependenciesOf(file)) {
-      deepest = Math.max(deepest, 1 + this.maxDepthFrom(dependency, seen));
-    }
-    seen.delete(file);
-    return deepest;
+  /**
+   * Longest chain of imports starting at `file`, counted in edges.
+   *
+   * Computed for the whole graph at once and cached, because both the
+   * dependency score and the deep-import-chain rule ask for it, and asking
+   * twice would mean walking the graph twice.
+   */
+  maxDepthFrom(file: string): number {
+    return this.depths().get(file) ?? 0;
+  }
+
+  /**
+   * Depth of every node, in O(nodes + edges).
+   *
+   * Longest path is only well defined on an acyclic graph, so the graph is
+   * first condensed into its strongly connected components. Inside a component
+   * every node reaches every other, so the chain through it can be at most
+   * `size - 1` edges long; between components the depth is the usual longest
+   * path over a DAG. Tarjan emits components in reverse topological order, so
+   * one pass in emission order is enough — every successor is already known.
+   *
+   * The previous implementation walked paths instead of nodes, which meant a
+   * graph with any branching was explored exponentially. Nothing about the
+   * result changes for acyclic graphs; what changes is that it finishes.
+   */
+  private depths(): Map<string, number> {
+    if (this.depthCache) return this.depthCache;
+
+    const adjacency = new Map<string, string[]>();
+    for (const [node, dependencies] of this.out) adjacency.set(node, [...dependencies]);
+
+    const components = stronglyConnectedComponents(adjacency);
+    const componentOf = new Map<string, number>();
+    components.forEach((component, index) => {
+      for (const node of component) componentOf.set(node, index);
+    });
+
+    const componentDepth: number[] = new Array<number>(components.length).fill(0);
+    const depths = new Map<string, number>();
+
+    components.forEach((component, index) => {
+      let beyond = 0;
+      for (const node of component) {
+        for (const dependency of adjacency.get(node) ?? []) {
+          const target = componentOf.get(dependency);
+          // Edges back into this component are covered by the size term.
+          if (target === undefined || target === index) continue;
+          beyond = Math.max(beyond, 1 + componentDepth[target]!);
+        }
+      }
+
+      const depth = component.length - 1 + beyond;
+      componentDepth[index] = depth;
+      for (const node of component) depths.set(node, depth);
+    });
+
+    this.depthCache = depths;
+    return depths;
   }
 }
 

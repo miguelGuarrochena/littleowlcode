@@ -3,3 +3,5 @@ node_modules
 coverage
 tests/fixtures
 pnpm-lock.yaml
+# Generated state, written by Little Owl itself.
+.little-owl

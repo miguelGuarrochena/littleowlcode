@@ -229,9 +229,37 @@ terminal 1:  npm run dev
 terminal 2:  little-owl watch
 ```
 
-Watch mode re-analyses only what changed, using a parse cache, and stays quiet unless something
-actually drifted. It measures against a fixed reference (your baseline if you have one), not against
-the state a second ago — otherwise slow degradation would never register.
+Watch mode stays quiet unless something actually drifted. It measures against a fixed reference
+(your baseline if you have one), not against the state a second ago — otherwise slow degradation
+would never register.
+
+**What it actually does on each save.** Every run is a full analysis: the whole dependency graph is
+rebuilt and every rule runs again. What is incremental is _parsing_ — files you have not touched are
+reused from the parse cache, which is the expensive part. On a large repository expect each run to
+take about as long as `little-owl check` does.
+
+New findings are grouped by how they relate to what you just saved:
+
+```
+Changed
+  src/services/orders.ts
+  3 files import this, directly or indirectly
+
+In the files you changed
+  ...
+In files that depend on the change
+  ...
+Elsewhere in the project, not caused by this change
+  ...
+```
+
+That last group matters. A finding in a file you have not touched is reported under its own heading
+rather than being listed beneath the file you just saved, because reachability through imports is
+the only honest link available — Little Owl cannot know that your edit caused a problem in a module
+that neither imports nor is imported by it.
+
+Edits made while an analysis is already running are kept and picked up by the next one, so nothing
+you type during a slow run is lost.
 
 ### prompt
 
@@ -431,8 +459,13 @@ Worth being straight about:
   comparing different projects. The findings matter more than the number.
 - **Inferred layers are guesses.** Little Owl says when it inferred them. Configure your layers to
   get checks you can trust.
-- **Python and Go analysis is shallow.** It is line-based, not a full parse. It will not replace Ruff
-  or `golangci-lint`, and it is not meant to.
+- **Python and Go analysis is shallow.** It is line-based, not a full parse: imports, function
+  boundaries, sizes and a handful of known smells. It will not replace Ruff or `golangci-lint`, and
+  it is not meant to. Two consequences worth knowing: Go exports are detected from capitalised
+  _functions_ only, so exported types, constants and variables are invisible to the dead-code and
+  pattern rules; and Python's `__init__.py` re-exports are not followed, so a module reached only
+  through a package export can look unreferenced. Both lower the confidence Little Owl reports
+  rather than producing silent false positives.
 - **Impact analysis is reachability, not proof.** "Potentially affected" means exactly that.
 - **Unused-dependency detection can be wrong.** Packages loaded through configuration or at runtime
   look unused. The finding is a prompt to check, not a verdict.
@@ -445,6 +478,13 @@ Worth being straight about:
 - **`explain` only reports what the repository records.** If no commit message says why something
   exists, it says so instead of guessing.
 - **It is not a security scanner.** For vulnerabilities, run your package manager's audit command.
+- **A single run scans at most 20,000 source files.** The cap stops an accidental run against a home
+  directory from taking an hour. If a project reaches it, every report says so — `check`, `review`,
+  `ci` and `doctor` all mark the analysis as partial, and `--json` carries `truncated: true`. Narrow
+  the analysis with `include` or `ignore` rather than trusting a truncated score.
+- **Watch mode re-runs every rule on each save.** Only parsing is incremental. It also cannot prove
+  that your edit caused a finding elsewhere, so it groups findings by import reachability and labels
+  anything it cannot connect to the change.
 
 ## Privacy
 
@@ -452,6 +492,11 @@ Little Owl Code is **read-only** and **offline**.
 
 - It never modifies your application source code. It only writes to `.little-owl/`.
 - It never commits, stages, checks out or pushes anything.
+- `.little-owl/config.ts` and `.little-owl/baseline.json` are meant to be committed — they are what
+  your team agreed on. `.little-owl/cache/` (the parse cache) and `.little-owl/history.json` (your
+  local review log) are machine state. Little Owl writes `.little-owl/.gitignore` covering those two
+  the first time it writes anything there, so the cache cannot drift into a pull request. An ignore
+  file you already have is extended, never overwritten.
 - It sends no code, no metrics and no telemetry anywhere.
 - It requires no API key and calls no AI service.
 

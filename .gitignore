@@ -3,4 +3,5 @@ dist
 coverage
 *.log
 .DS_Store
-.little-owl/cache
+**/.little-owl/cache/
+**/.little-owl/history.json

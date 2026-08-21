@@ -49,6 +49,9 @@ Current version: **1**.
   "counts": { "error": 0, "warning": 5, "info": 6 },
   // Files that could not be read or parsed. Never fatal.
   "warnings": [{ "file": "src/legacy/broken.py", "message": "could not be parsed (…)" }],
+  // True when the scan stopped at its 20,000-file limit. Every number above
+  // then describes part of the repository rather than all of it.
+  "truncated": false,
   "findings": [
     {
       "id": "architecture/layer-skip",
@@ -68,6 +71,14 @@ Current version: **1**.
   "durationMs": 412,
 }
 ```
+
+### Partial analyses
+
+`truncated` is `true` when a project has more source files than one run will scan. Treat the metrics
+as a sample rather than a measurement, and narrow the analysis with `include` or `ignore` before
+comparing scores. `little-owl ci --json` repeats the flag inside its `ci` block, and `little-owl ci`
+prints a `PARTIAL ANALYSIS` line above its verdict so a pipeline cannot read a partial pass as a
+clean one.
 
 ### Finding fields
 

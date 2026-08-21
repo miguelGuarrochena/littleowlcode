@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ParsedFile } from './types.js';
 import { readVersion } from '../utils/version.js';
+import { ensureLocalGitignore } from '../config/load.js';
 
 /**
  * Parse cache keyed by file path and validated with mtime + size.
@@ -32,11 +33,14 @@ export class ParseCache {
   private entries = new Map<string, CacheEntry>();
   private dirty = false;
 
-  constructor(private readonly file: string | null) {}
+  constructor(
+    private readonly file: string | null,
+    private readonly root: string | null = null,
+  ) {}
 
   static open(root: string, enabled = true): ParseCache {
     const file = enabled ? path.join(root, '.little-owl', 'cache', 'parse.json') : null;
-    const cache = new ParseCache(file);
+    const cache = new ParseCache(file, root);
     if (file) cache.load();
     return cache;
   }
@@ -59,6 +63,18 @@ export class ParseCache {
     return entry.parsed;
   }
 
+  /**
+   * The stored entry for a path regardless of whether it is still valid.
+   *
+   * `get` refuses an entry whose mtime or size moved, because that is the cheap
+   * check. Once the file has been read anyway, its content hash can still show
+   * the change was cosmetic — a `git checkout` or a `touch` rewrites mtimes
+   * without changing a byte — and re-parsing it would be wasted work.
+   */
+  peek(relativePath: string): ParsedFile | null {
+    return this.entries.get(relativePath)?.parsed ?? null;
+  }
+
   set(relativePath: string, stats: fs.Stats, parsed: ParsedFile): void {
     this.entries.set(relativePath, { mtimeMs: stats.mtimeMs, size: stats.size, parsed });
     this.dirty = true;
@@ -74,6 +90,9 @@ export class ParseCache {
 
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
+      // The cache is machine state. Make sure it cannot drift into the repo
+      // even for someone who never ran `little-owl init`.
+      if (this.root) ensureLocalGitignore(this.root);
       const data: CacheFile = {
         version: CACHE_VERSION,
         tool: readVersion(),

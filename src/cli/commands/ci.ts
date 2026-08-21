@@ -1,5 +1,6 @@
 import { runReview } from '../../review/review.js';
 import { loadConfig } from '../../config/load.js';
+import { MAX_SCANNED_FILES } from '../../core/scan.js';
 import { printJson, reviewToJson } from '../../output/json.js';
 import { countBySeverity } from '../../output/report.js';
 import { statusText } from '../../output/theme.js';
@@ -54,6 +55,9 @@ export async function ciCommand(options: CiOptions): Promise<number> {
         failOn,
         maxDrop,
         newFindingsOnly: newOnly,
+        // Repeated here so a pipeline reading only the `ci` block cannot miss
+        // that the verdict covers part of the repository.
+        truncated: review.current.truncated,
       },
     });
     return verdict.exitCode;
@@ -61,6 +65,14 @@ export async function ciCommand(options: CiOptions): Promise<number> {
 
   const considered = newOnly ? review.newFindings : review.current.findings;
   const counts = countBySeverity(considered);
+
+  // A partial analysis must never read as a clean bill of health.
+  if (review.current.truncated) {
+    print(
+      `little-owl: PARTIAL ANALYSIS — only the first ${MAX_SCANNED_FILES.toLocaleString()} ` +
+        'source files were scanned, so this verdict does not cover the whole repository',
+    );
+  }
 
   print(`little-owl: ${statusText[review.status]}`);
   print(

@@ -280,10 +280,7 @@ function writeConfigFile(root: string, template: ConfigTemplate): string {
   fs.writeFileSync(file, renderConfigFile(template));
 
   // The config and the baseline belong in version control; the cache and the
-  // local review log do not.
-  const gitignore = path.join(directory, '.gitignore');
-  if (!fs.existsSync(gitignore)) {
-    fs.writeFileSync(gitignore, 'cache/\nhistory.json\n');
-  }
+  // local review log do not. `ensureConfigDir` has already written the ignore
+  // file that keeps them apart.
   return file;
 }

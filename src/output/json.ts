@@ -47,6 +47,8 @@ export interface JsonCheckOutput {
   findings: JsonFinding[];
   /** Files that could not be read or parsed. Never fatal. */
   warnings: AnalysisWarning[];
+  /** True when the scan hit its file limit, so these numbers cover part of the repository. */
+  truncated: boolean;
   durationMs: number;
 }
 
@@ -113,6 +115,7 @@ export function checkToJson(result: AnalysisResult, version: string): JsonCheckO
     counts: counts(result.findings),
     findings: result.findings.map(toJsonFinding),
     warnings: result.warnings,
+    truncated: result.truncated,
     durationMs: result.durationMs,
   };
 }

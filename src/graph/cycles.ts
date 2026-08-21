@@ -1,17 +1,9 @@
 import type { DependencyGraph } from './dependency-graph.js';
+import { stronglyConnectedComponents } from './scc.js';
 
 export interface Cycle {
   /** Files in import order; the first file is repeated implicitly at the end. */
   files: string[];
-}
-
-interface TarjanState {
-  index: number;
-  indices: Map<string, number>;
-  lowLinks: Map<string, number>;
-  stack: string[];
-  onStack: Set<string>;
-  components: string[][];
 }
 
 /**
@@ -22,21 +14,9 @@ interface TarjanState {
  */
 export function findCycles(graph: DependencyGraph, includeTypeOnly = false): Cycle[] {
   const adjacency = buildAdjacency(graph, includeTypeOnly);
-  const state: TarjanState = {
-    index: 0,
-    indices: new Map(),
-    lowLinks: new Map(),
-    stack: [],
-    onStack: new Set(),
-    components: [],
-  };
-
-  for (const node of [...adjacency.keys()].sort()) {
-    if (!state.indices.has(node)) strongConnect(node, adjacency, state);
-  }
 
   const cycles: Cycle[] = [];
-  for (const component of state.components) {
+  for (const component of stronglyConnectedComponents(adjacency)) {
     if (component.length < 2) continue;
     const path = extractCyclePath(component, adjacency);
     if (path.length >= 2) cycles.push({ files: path });
@@ -56,63 +36,6 @@ function buildAdjacency(graph: DependencyGraph, includeTypeOnly: boolean): Map<s
   }
   for (const list of adjacency.values()) list.sort();
   return adjacency;
-}
-
-/** Iterative Tarjan so deep graphs cannot blow the call stack. */
-function strongConnect(start: string, adjacency: Map<string, string[]>, state: TarjanState): void {
-  const callStack: Array<{ node: string; childIndex: number }> = [{ node: start, childIndex: 0 }];
-
-  state.indices.set(start, state.index);
-  state.lowLinks.set(start, state.index);
-  state.index += 1;
-  state.stack.push(start);
-  state.onStack.add(start);
-
-  while (callStack.length > 0) {
-    const frame = callStack[callStack.length - 1]!;
-    const neighbours = adjacency.get(frame.node) ?? [];
-
-    if (frame.childIndex < neighbours.length) {
-      const next = neighbours[frame.childIndex]!;
-      frame.childIndex += 1;
-
-      if (!state.indices.has(next)) {
-        state.indices.set(next, state.index);
-        state.lowLinks.set(next, state.index);
-        state.index += 1;
-        state.stack.push(next);
-        state.onStack.add(next);
-        callStack.push({ node: next, childIndex: 0 });
-      } else if (state.onStack.has(next)) {
-        state.lowLinks.set(
-          frame.node,
-          Math.min(state.lowLinks.get(frame.node)!, state.indices.get(next)!),
-        );
-      }
-      continue;
-    }
-
-    callStack.pop();
-    const parent = callStack[callStack.length - 1];
-    if (parent) {
-      state.lowLinks.set(
-        parent.node,
-        Math.min(state.lowLinks.get(parent.node)!, state.lowLinks.get(frame.node)!),
-      );
-    }
-
-    if (state.lowLinks.get(frame.node) === state.indices.get(frame.node)) {
-      const component: string[] = [];
-      let member: string | undefined;
-      do {
-        member = state.stack.pop();
-        if (member === undefined) break;
-        state.onStack.delete(member);
-        component.push(member);
-      } while (member !== frame.node);
-      state.components.push(component);
-    }
-  }
 }
 
 /**
