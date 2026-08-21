@@ -3,7 +3,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { analyzeProject } from '../src/core/analyze.js';
 import { ParseCache } from '../src/core/cache.js';
-import { MAX_SCANNED_FILES } from '../src/core/scan.js';
+import { MAX_SCANNED_FILES, scanFiles } from '../src/core/scan.js';
 import { resolveConfig, ensureLocalGitignore } from '../src/config/load.js';
 import {
   isImplicitlyUsed,
@@ -188,5 +188,128 @@ describe('local state stays out of git', () => {
     ensureLocalGitignore(project.root);
 
     expect(fs.readFileSync(ignorePath(project.root), 'utf8')).toBe(first);
+  });
+});
+
+/**
+ * Findings a real project would reject.
+ *
+ * Each of these came out of running Little Owl against six real repositories
+ * before the first release. They are pinned here because a false positive at
+ * error level costs more trust than the true findings around it earn.
+ */
+describe('false positives found while dogfooding', () => {
+  it('does not flag a client component for calling a server action', async () => {
+    // The Server Actions pattern: the directive exists so client components
+    // can call the module. Next.js replaces the import with an RPC reference.
+    project = TempProject.create({
+      'package.json': JSON.stringify({ name: 'next-app', dependencies: { next: '^15.0.0' } }),
+      'src/lib/actions.ts':
+        '"use server";\n\nexport async function signIn(email: string) {\n  return email;\n}\n',
+      'src/app/login/page.tsx':
+        '"use client";\n\nimport { signIn } from "../../lib/actions";\n' +
+        'export default function Login() {\n  return <button onClick={() => signIn("a")}>go</button>;\n}\n',
+    });
+
+    const { result } = await project.analyze();
+    expect(findingsFor(result.findings, 'next/server-import-in-client')).toEqual([]);
+  });
+
+  it('still flags a client component importing a server-only package', async () => {
+    project = TempProject.create({
+      'package.json': JSON.stringify({ name: 'next-app', dependencies: { next: '^15.0.0' } }),
+      'src/app/leaky/page.tsx':
+        '"use client";\n\nimport fs from "node:fs";\nexport default function Page() {\n' +
+        '  return <div>{fs.readdirSync(".").length}</div>;\n}\n',
+    });
+
+    const { result } = await project.analyze();
+    const findings = findingsFor(result.findings, 'next/server-import-in-client');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.detail).toEqual(['imports node:fs']);
+  });
+
+  it('does not call a stylesheet or image import an unresolved module', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"assets"}',
+      'src/app/globals.css': 'body { margin: 0; }',
+      'src/app/layout.tsx':
+        'import "./globals.css";\nimport logo from "../../public/logo.png";\n' +
+        'export default function Layout() {\n  return <img src={logo} alt="" />;\n}\n',
+    });
+
+    const { result, context } = await project.analyze();
+    expect(context.graph.unresolved).toEqual([]);
+    expect(findingsFor(result.findings, 'maintainability/unresolved-import')).toEqual([]);
+  });
+
+  it('counts a package as used when only its stylesheet is imported', async () => {
+    project = TempProject.create({
+      'package.json': JSON.stringify({
+        name: 'assets',
+        dependencies: { bootstrap: '^5.0.0' },
+      }),
+      'src/main.ts': 'import "bootstrap/dist/css/bootstrap.min.css";\nexport const app = 1;\n',
+    });
+
+    const { result, context } = await project.analyze();
+    expect([...context.graph.externalPackages()]).toContain('bootstrap');
+    expect(findingsFor(result.findings, 'dependencies/unused-dependency')).toEqual([]);
+  });
+
+  it('does not report react-dom as unused', async () => {
+    project = TempProject.create({
+      'package.json': JSON.stringify({
+        name: 'react-app',
+        dependencies: { react: '^19.0.0', 'react-dom': '^19.0.0' },
+      }),
+      'src/app.tsx':
+        'import { useState } from "react";\nexport const useThing = () => useState(0);\n',
+    });
+
+    const { result } = await project.analyze();
+    const finding = findingsFor(result.findings, 'dependencies/unused-dependency')[0];
+    expect(finding?.detail ?? []).not.toContain('react-dom');
+  });
+});
+
+/**
+ * A project where nothing was scanned used to score 100 on every metric,
+ * because there was nothing to lose points for.
+ */
+describe('empty analysis', () => {
+  it('reports that nothing was analysed instead of a perfect score', async () => {
+    project = TempProject.create({ 'package.json': '{"name":"empty"}', 'README.md': '# nothing' });
+
+    const { result } = await project.analyze();
+    expect(result.project.fileCount).toBe(0);
+
+    const rendered = renderHealth(result);
+    expect(rendered).toContain('No source files were analysed');
+    expect(rendered).not.toContain('100 / 100');
+  });
+
+  it('scans source files that are symlinks', () => {
+    // Homebrew-style layouts and some package managers link individual source
+    // files into place. Skipping them reported the project as empty.
+    project = TempProject.create({
+      'package.json': '{"name":"linked"}',
+      'real/module.ts': 'export const value = 1;\n',
+    });
+    fs.mkdirSync(project.path('src'), { recursive: true });
+    fs.symlinkSync(project.path('real/module.ts'), project.path('src/linked.ts'));
+
+    const { files } = scanFiles(project.root, resolveConfig({ ignore: ['real/**'] }));
+    expect(files).toContain('src/linked.ts');
+  });
+
+  it('ignores a broken symlink rather than failing', () => {
+    const broken = TempProject.create({ 'package.json': '{"name":"broken"}' });
+    project = broken;
+    fs.mkdirSync(broken.path('src'), { recursive: true });
+    fs.symlinkSync(broken.path('src/nowhere.ts'), broken.path('src/dangling.ts'));
+
+    expect(() => scanFiles(broken.root, resolveConfig({}))).not.toThrow();
+    expect(scanFiles(broken.root, resolveConfig({})).files).toEqual([]);
   });
 });

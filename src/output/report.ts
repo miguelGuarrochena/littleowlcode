@@ -80,7 +80,30 @@ export function renderTruncationNotice(): string {
   ].join('\n');
 }
 
+/**
+ * Shown instead of a score when nothing was analysed.
+ *
+ * A project with no scanned files scores 100 on every metric, because there is
+ * nothing to lose points for. Printing that would be the most misleading
+ * output this tool can produce, so the empty case is stated plainly instead.
+ */
+export function renderEmptyAnalysis(): string {
+  return [
+    heading('CODEBASE HEALTH'),
+    '',
+    colors.yellow(`${icons.warn} No source files were analysed, so there is nothing to score.`),
+    '',
+    dim('Little Owl reads .ts, .tsx, .js, .jsx, .mjs, .cjs, .py and .go files. This usually means'),
+    dim('the sources live somewhere the `include` or `ignore` patterns exclude, or that you are'),
+    dim('not in the project root.'),
+    '',
+    dim(`${icons.arrow} little-owl doctor  shows what Little Owl can and cannot see here.`),
+  ].join('\n');
+}
+
 export function renderHealth(result: AnalysisResult, options: RenderOptions = {}): string {
+  if (result.project.fileCount === 0) return renderEmptyAnalysis();
+
   const counts = countBySeverity(result.findings);
   const sections: string[] = [
     heading('CODEBASE HEALTH'),

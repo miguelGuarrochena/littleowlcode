@@ -32,10 +32,20 @@ const effectDependencyRisk: Rule = {
   },
 };
 
+/**
+ * A `"use client"` module importing a server-only *package*.
+ *
+ * Importing a `"use server"` module is deliberately not reported. That is the
+ * Server Actions pattern working exactly as designed: the directive exists so
+ * client components can call the module, and the bundler replaces the import
+ * with an RPC reference rather than shipping the server code. Flagging it told
+ * Next.js developers their standard login form was broken, which is both wrong
+ * and the fastest way to lose their trust in everything else here.
+ */
 const serverImportInClient: Rule = {
   id: 'next/server-import-in-client',
   category: 'architecture',
-  description: 'Server-only code reachable from a "use client" module.',
+  description: 'A "use client" module importing a package that only runs on the server.',
   run(context) {
     const findings: Finding[] = [];
 
@@ -43,26 +53,19 @@ const serverImportInClient: Rule = {
       if (file.meta['useClient'] !== true) continue;
 
       const direct = (file.meta['serverOnlyImports'] as string[] | undefined) ?? [];
-      const viaServerModule = context.graph
-        .dependenciesOf(file.path)
-        .filter((dependency) => context.fileMap.get(dependency)?.meta['useServer'] === true);
-
-      if (direct.length === 0 && viaServerModule.length === 0) continue;
+      if (direct.length === 0) continue;
 
       const finding = createFinding(this, context, {
         file: file.path,
-        title: 'Client component reaches server-only code',
+        title: 'Client component imports a server-only package',
         message:
-          `${file.path} is marked "use client" but imports code that only runs on the server. ` +
-          'This either fails at build time or silently ships server code to the browser.',
-        detail: [
-          ...direct.map((name) => `imports ${name}`),
-          ...viaServerModule.map((name) => `imports ${name} ("use server")`),
-        ],
+          `${file.path} is marked "use client" but imports ${direct.join(', ')}, which only runs ` +
+          'on the server. This either fails at build time or pulls server code into the browser bundle.',
+        detail: direct.map((name) => `imports ${name}`),
         suggestion:
-          'Move the server work into a server component or a server action, and pass the result down as props.',
-        key: [...direct, ...viaServerModule],
-        current: [...direct, ...viaServerModule],
+          'Move the work into a server component or a server action, and pass the result down as props.',
+        key: [...direct],
+        current: [...direct],
       });
       if (finding) findings.push(finding);
     }

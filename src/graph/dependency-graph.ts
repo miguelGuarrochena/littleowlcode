@@ -1,4 +1,4 @@
-import type { DependencyEdge, ParsedFile } from '../core/types.js';
+import type { DependencyEdge, ImportRef, ParsedFile } from '../core/types.js';
 import { stronglyConnectedComponents } from './scc.js';
 import {
   packageNameOf,
@@ -12,6 +12,21 @@ export interface UnresolvedImport {
   file: string;
   specifier: string;
   line: number;
+}
+
+/**
+ * Specifiers that are assets rather than modules.
+ *
+ * Bundlers let you `import './globals.css'` or `import logo from './logo.png'`.
+ * Little Owl only reads source files, so those imports can never resolve — and
+ * reporting them as unresolved told every frontend project it had a broken
+ * path alias, while quietly costing it dependency-score points.
+ */
+const ASSET_EXTENSION =
+  /\.(css|scss|sass|less|styl|svg|png|jpe?g|gif|webp|avif|ico|bmp|woff2?|ttf|otf|eot|mp[34]|webm|wav|ogg|pdf|txt|md|mdx|csv|ya?ml|json|json5|graphql|gql|wasm|glsl|frag|vert)(\?.*)?$/i;
+
+export function isAssetImport(specifier: string): boolean {
+  return ASSET_EXTENSION.test(specifier);
 }
 
 /**
@@ -162,6 +177,27 @@ export class DependencyGraph {
   }
 }
 
+/**
+ * Files an import points at something outside the project: a package, an asset,
+ * or nothing Little Owl can account for.
+ */
+function recordUnresolved(graph: DependencyGraph, from: string, reference: ImportRef): void {
+  const packageName = packageNameOf(reference.raw);
+  if (packageName) {
+    // `bootstrap/dist/bootstrap.css` still means bootstrap is in use, so the
+    // package is recorded before assets are filtered out.
+    reference.packageName = packageName;
+    graph.addExternal(from, packageName);
+    return;
+  }
+
+  // A relative asset import is not a module Little Owl failed to find; it is
+  // one it was never going to read.
+  if (isAssetImport(reference.raw)) return;
+
+  graph.unresolved.push({ file: from, specifier: reference.raw, line: reference.line });
+}
+
 export function buildDependencyGraph(
   files: ParsedFile[],
   context: ResolverContext,
@@ -213,17 +249,7 @@ export function buildDependencyGraph(
         continue;
       }
 
-      const packageName = packageNameOf(reference.raw);
-      if (packageName) {
-        reference.packageName = packageName;
-        graph.addExternal(file.path, packageName);
-      } else {
-        graph.unresolved.push({
-          file: file.path,
-          specifier: reference.raw,
-          line: reference.line,
-        });
-      }
+      recordUnresolved(graph, file.path, reference);
     }
   }
 

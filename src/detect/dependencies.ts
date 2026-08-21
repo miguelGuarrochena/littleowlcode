@@ -13,6 +13,8 @@
  */
 const IMPLICITLY_USED = [
   /^@types\//,
+  // Required by React at runtime; App Router code never imports it directly.
+  /^react-dom$/,
   /^eslint/,
   /^@eslint\//,
   /^typescript-eslint$/,

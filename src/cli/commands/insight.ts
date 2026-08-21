@@ -135,6 +135,19 @@ export function normalizeTarget(root: string, target: string): string {
   return toPosix(path.relative(root, absolute));
 }
 
+function filesAnalysedDetail(fileCount: number, truncated: boolean, elapsed: number): string {
+  if (fileCount === 0) {
+    return 'none — no .ts/.js/.py/.go files matched, so every score below is meaningless';
+  }
+  if (truncated) {
+    return (
+      `${fileCount} files in ${elapsed}ms — the scan limit of ` +
+      `${MAX_SCANNED_FILES.toLocaleString()} was reached, so this project is only partly analysed`
+    );
+  }
+  return `${fileCount} files in ${elapsed}ms`;
+}
+
 interface DoctorCheck {
   name: string;
   status: 'ok' | 'warn' | 'info';
@@ -198,11 +211,8 @@ export async function doctorCommand(options: InsightOptions): Promise<number> {
 
   checks.push({
     name: 'Files analysed',
-    status: result.truncated ? 'warn' : result.project.fileCount > 0 ? 'ok' : 'warn',
-    detail: result.truncated
-      ? `${result.project.fileCount} files in ${elapsed}ms — the scan limit of ` +
-        `${MAX_SCANNED_FILES.toLocaleString()} was reached, so this project is only partly analysed`
-      : `${result.project.fileCount} files in ${elapsed}ms`,
+    status: result.truncated || result.project.fileCount === 0 ? 'warn' : 'ok',
+    detail: filesAnalysedDetail(result.project.fileCount, result.truncated, elapsed),
   });
 
   const unresolved = context.graph.unresolved.length;
@@ -281,7 +291,7 @@ export async function doctorCommand(options: InsightOptions): Promise<number> {
     problems === 0
       ? colors.green(`${icons.ok} Everything Little Owl needs is in place.`)
       : colors.yellow(
-          `${icons.warn} ${problems} thing${problems === 1 ? '' : 's'} limit what Little Owl can see.`,
+          `${icons.warn} ${problems} thing${problems === 1 ? ' limits' : 's limit'} what Little Owl can see.`,
         ),
   );
   print('');

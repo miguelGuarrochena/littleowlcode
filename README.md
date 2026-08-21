@@ -11,6 +11,32 @@ Keep your codebase healthy while AI writes code.
 npx little-owl-code
 ```
 
+**Reads your code, tells you what changed structurally, and stays out of the way.**
+
+|               |                                                                              |
+| ------------- | ---------------------------------------------------------------------------- |
+| **Privacy**   | Fully offline. No account, no API key, no telemetry, no network calls at all |
+| **Languages** | TypeScript and JavaScript (full syntax tree), Python and Go (line-based)     |
+| **Writes**    | Nothing outside `.little-owl/`. Never touches your source                    |
+| **Needs**     | Node 18.18+. Git optional, but `review` and `explain` use it                 |
+
+```
+Overall          78 → 74 ↓
+
+Architecture     91 →  84 ↓
+Complexity       84 →  71 ↓
+
+Since the baseline: +1 circular dependency, +2 skipped-layer imports
+
+🔴 architecture  ui imports infrastructure directly
+   components/Orders.tsx:4
+   → Route the call through application instead of importing infrastructure from here.
+```
+
+It finds circular dependencies, broken layer boundaries, oversized files and functions, duplicated
+logic, type-safety escape hatches, dependency drift, dead code and test gaps — and tells you which
+of them your last change introduced.
+
 ---
 
 ## The problem

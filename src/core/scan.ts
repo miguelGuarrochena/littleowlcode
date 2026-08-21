@@ -102,7 +102,7 @@ export function scanFiles(
         continue;
       }
 
-      if (!entry.isFile()) continue;
+      if (!isReadableFile(entry, absolute)) continue;
       if (languageOf(entry.name) === 'unknown') continue;
       if (matchesCompiled(relative, ignore)) continue;
       if (include.length > 0 && !matchesCompiled(relative, include)) continue;
@@ -118,6 +118,27 @@ export function scanFiles(
   walk(root);
   files.sort();
   return { files, truncated };
+}
+
+/**
+ * Whether a directory entry is a file worth reading.
+ *
+ * A symlink is neither a directory nor a file to `readdir`. Package managers
+ * and Homebrew-style layouts link individual source files into place, and
+ * skipping them silently reported those projects as empty. Only links to files
+ * are followed — a linked directory is still skipped, so a link pointing back
+ * up the tree cannot make the walk loop.
+ */
+function isReadableFile(entry: fs.Dirent, absolute: string): boolean {
+  if (entry.isFile()) return true;
+  if (!entry.isSymbolicLink()) return false;
+
+  try {
+    return fs.statSync(absolute).isFile();
+  } catch {
+    // A broken link points at nothing worth analysing.
+    return false;
+  }
 }
 
 /**
