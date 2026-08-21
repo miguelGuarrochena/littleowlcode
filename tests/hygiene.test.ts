@@ -14,6 +14,7 @@ import { renderDependencies, renderHealth, renderTruncationNotice } from '../src
 import { checkToJson } from '../src/output/json.js';
 import { findingsFor } from './helpers.js';
 import { TempProject } from './temp-project.js';
+import { detectChanges } from '../src/git/git.js';
 
 let project: TempProject | null = null;
 
@@ -353,5 +354,55 @@ describe('parse cache and the shape it stores', () => {
       ?.imports.find((entry) => entry.resolved === 'src/utils.ts');
 
     expect(reference?.wildcard).toBe(true);
+  });
+});
+
+/**
+ * Findings from running the published package against real projects.
+ */
+describe('changed-file reporting', () => {
+  it('leaves installed dependencies and tool output out of a change', () => {
+    // `git ls-files --others` honours .gitignore, so a project without one
+    // reports every installed file as untracked. A seven-file edit then reads
+    // as "235 files changed".
+    project = TempProject.create({
+      'package.json': '{"name":"noisy"}',
+      'src/a.ts': 'export const a = 1;\n',
+      'node_modules/dep/index.js': 'module.exports = 1;\n',
+      'playwright-report/index.html': '<html></html>',
+      'test-results/results.json': '{}',
+      'dist/bundle.js': 'var a=1;\n',
+    });
+    project.git(['init', '-q']);
+    project.git(['config', 'user.email', 'test@example.com']);
+    project.git(['config', 'user.name', 'Test']);
+
+    const changes = detectChanges(project.root);
+    const paths = changes?.files.map((file) => file.path) ?? [];
+
+    expect(paths).toContain('src/a.ts');
+    expect(paths).toContain('package.json');
+    for (const noise of ['node_modules', 'playwright-report', 'test-results', 'dist']) {
+      expect(paths.some((path) => path.startsWith(noise))).toBe(false);
+    }
+  });
+
+  it('does not offer tool output as a place to look for source', async () => {
+    // `init` used to list every top-level directory, so a Playwright project
+    // was invited to treat its HTML report as project code.
+    project = TempProject.create({
+      'package.json': '{"name":"picky"}',
+      'src/a.ts': 'export const a = 1;\n',
+      'supabase/fn.ts': 'export const fn = 1;\n',
+      'playwright-report/index.html': '<html></html>',
+      'test-results/out.json': '{}',
+    });
+
+    const { context } = await project.analyze();
+    const directories = new Set(
+      context.files.map((file) => file.path.split('/')[0]).filter((top) => top),
+    );
+
+    expect([...directories].sort()).toEqual(['src', 'supabase']);
   });
 });

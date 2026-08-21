@@ -19,13 +19,15 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
           cache: pnpm
 
-      # Trusted publishing needs a newer npm than Node 20 ships with.
+      # Trusted publishing needs npm 11.5.1 or newer, which is ahead of what
+      # Node ships with. Pinned to the 11 line rather than `latest`: npm 12
+      # requires a Node this job does not run.
       - name: Use an npm that supports trusted publishing
-        run: npm install -g npm@latest
+        run: npm install -g npm@^11.5.1
 
       - run: pnpm install --frozen-lockfile
 

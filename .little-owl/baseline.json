@@ -1,7 +1,7 @@
 {
   "version": "1",
-  "createdAt": "2026-08-21T17:50:44.701Z",
-  "commit": "b25a628c7b85aa8d6ed93c1df2b1a67da05c2fcd",
+  "createdAt": "2026-08-21T19:45:11.691Z",
+  "commit": "fba7cf6dfba280695d93e73ae556a83e161761a0",
   "branch": "main",
   "metrics": {
     "overall": 98,
@@ -13,7 +13,7 @@
   },
   "stats": {
     "files": 65,
-    "linesOfCode": 8601,
+    "linesOfCode": 8596,
     "functions": 704,
     "cycles": 0,
     "layerViolations": 0,
@@ -60,11 +60,11 @@
     },
     {
       "id": "complexity/large-function",
-      "fingerprint": "8053b4230df0",
+      "fingerprint": "d28a22c2affa",
       "severity": "warning",
       "category": "complexity",
       "file": "src/cli/commands/init.ts",
-      "line": 36,
+      "line": 37,
       "title": "initCommand() is 98 lines",
       "message": "initCommand() in src/cli/commands/init.ts runs for 98 lines, past the 80-line limit. Long functions are hard to test and tend to hide more than one job.",
       "suggestion": "Pull the distinct steps out into named helpers.",
@@ -73,11 +73,11 @@
     },
     {
       "id": "complexity/high-complexity",
-      "fingerprint": "5ca40bf86e00",
+      "fingerprint": "768852cacc52",
       "severity": "warning",
       "category": "complexity",
       "file": "src/cli/commands/init.ts",
-      "line": 36,
+      "line": 37,
       "title": "initCommand() has a complexity of 18",
       "message": "initCommand() contains 18 independent branches (limit 15). Every branch is another path a change can break and another case tests must cover.",
       "suggestion": "Flatten early returns, or move each branch group into its own function.",
@@ -369,9 +369,9 @@
       "maxComplexity": 11
     },
     "src/cli/commands/init.ts": {
-      "lines": 291,
-      "sloc": 240,
-      "functions": 18,
+      "lines": 280,
+      "sloc": 218,
+      "functions": 16,
       "maxComplexity": 18
     },
     "src/cli/commands/insight.ts": {
@@ -423,8 +423,8 @@
       "maxComplexity": 9
     },
     "src/config/defaults.ts": {
-      "lines": 172,
-      "sloc": 151,
+      "lines": 178,
+      "sloc": 157,
       "functions": 2,
       "maxComplexity": 2
     },
@@ -465,8 +465,8 @@
       "maxComplexity": 21
     },
     "src/core/scan.ts": {
-      "lines": 172,
-      "sloc": 124,
+      "lines": 184,
+      "sloc": 131,
       "functions": 7,
       "maxComplexity": 15
     },
@@ -489,9 +489,9 @@
       "maxComplexity": 10
     },
     "src/git/git.ts": {
-      "lines": 308,
-      "sloc": 237,
-      "functions": 29,
+      "lines": 320,
+      "sloc": 241,
+      "functions": 31,
       "maxComplexity": 13
     },
     "src/graph/cycles.ts": {

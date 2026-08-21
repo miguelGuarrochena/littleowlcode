@@ -25,8 +25,12 @@ export const languageOf = (file: string): Language => {
   return LANGUAGE_BY_EXTENSION[path.extname(file).toLowerCase()] ?? 'unknown';
 };
 
-/** Directories skipped before we even stat their contents, for speed. */
-const HARD_SKIP = new Set([
+/**
+ * Directories whose contents are never project source, whatever the
+ * configuration says. Skipped before we even stat them, and also used to keep
+ * them out of the changed-file list a review reports.
+ */
+export const NEVER_ANALYSED = new Set([
   'node_modules',
   '.git',
   'dist',
@@ -46,6 +50,14 @@ const HARD_SKIP = new Set([
   '.little-owl',
   '.idea',
   '.vscode',
+  // Tool output that lands beside the source and is regularly left untracked.
+  'playwright-report',
+  'test-results',
+  'storybook-static',
+  '.vercel',
+  '.output',
+  '.astro',
+  '.parcel-cache',
 ]);
 
 /**
@@ -96,7 +108,7 @@ export const scanFiles = (
       const relative = toPosix(path.relative(root, absolute));
 
       if (entry.isDirectory()) {
-        if (HARD_SKIP.has(entry.name)) continue;
+        if (NEVER_ANALYSED.has(entry.name)) continue;
         if (matchesCompiled(`${relative}/`, ignore) || matchesCompiled(relative, ignore)) continue;
         walk(absolute);
         continue;

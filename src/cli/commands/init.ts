@@ -9,6 +9,7 @@ import { buildBaseline, writeBaseline } from '../../baseline/baseline.js';
 import { renderHealth } from '../../output/report.js';
 import { colors, dim, icons } from '../../output/theme.js';
 import type { Strictness } from '../../config/schema.js';
+import type { ParsedFile } from '../../core/types.js';
 import {
   cancelled,
   createProgress,
@@ -78,7 +79,7 @@ export const initCommand = async (options: InitOptions): Promise<number> => {
     if (prompts.isCancel(structure)) cancelled();
     layers = layersFor(String(structure), detected.dirsByLayer, root);
 
-    const topLevel = topLevelDirectories(root);
+    const topLevel = sourceDirectories(context.files);
     if (topLevel.length > 0) {
       const chosen = await prompts.multiselect({
         message: 'Which folders contain application code?',
@@ -169,37 +170,25 @@ const layersFor = (
   return detected;
 };
 
-const topLevelDirectories = (root: string): string[] => {
-  const skip = new Set([
-    'node_modules',
-    '.git',
-    '.github',
-    'dist',
-    'build',
-    'coverage',
-    '.next',
-    '.turbo',
-    'public',
-    'static',
-    'assets',
-    '.vscode',
-    '.idea',
-    '.little-owl',
-    'venv',
-    '.venv',
-  ]);
+/**
+ * Top-level directories that actually hold analysable source.
+ *
+ * Derived from the files the scan already found, rather than from a list of
+ * names to avoid. A deny-list is always one build tool behind — `init` used to
+ * offer `playwright-report/` and `test-results/` as project code, because
+ * nothing had told it otherwise. A directory with no source file in it cannot
+ * be somewhere the analysis needs to look.
+ */
+const sourceDirectories = (files: ParsedFile[]): string[] => {
+  const directories = new Set<string>();
 
-  try {
-    return fs
-      .readdirSync(root, { withFileTypes: true })
-      .filter(
-        (entry) => entry.isDirectory() && !entry.name.startsWith('.') && !skip.has(entry.name),
-      )
-      .map((entry) => entry.name)
-      .sort();
-  } catch {
-    return [];
+  for (const file of files) {
+    const [top] = file.path.split('/');
+    // A path with no slash is a loose file at the root, not a directory.
+    if (top && top !== file.path) directories.add(top);
   }
+
+  return [...directories].sort();
 };
 
 const SUPPORT_DIRECTORIES = new Set([

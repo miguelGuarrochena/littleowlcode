@@ -25,31 +25,12 @@
 npx little-owl-code
 ```
 
-**Reads your code, tells you what changed structurally, and stays out of the way.**
+Little Owl reads your project from disk, builds its dependency graph, and tells you what your last
+change did to the shape of the codebase — which boundaries it crossed, what got more complex, what
+is now duplicated.
 
-|               |                                                                              |
-| ------------- | ---------------------------------------------------------------------------- |
-| **Privacy**   | Fully offline. No account, no API key, no telemetry, no network calls at all |
-| **Languages** | TypeScript and JavaScript (full syntax tree), Python and Go (line-based)     |
-| **Writes**    | Nothing outside `.little-owl/`. Never touches your source                    |
-| **Needs**     | Node 18.18+. Git optional, but `review` and `explain` use it                 |
-
-```
-Overall          78 → 74 ↓
-
-Architecture     91 →  84 ↓
-Complexity       84 →  71 ↓
-
-Since the baseline: +1 circular dependency, +2 skipped-layer imports
-
-🔴 architecture  ui imports infrastructure directly
-   components/Orders.tsx:4
-   → Route the call through application instead of importing infrastructure from here.
-```
-
-It finds circular dependencies, broken layer boundaries, oversized files and functions, duplicated
-logic, type-safety escape hatches, dependency drift, dead code and test gaps — and tells you which
-of them your last change introduced.
+It is **deterministic** (same code, same findings, every machine), **read-only** (it never edits your
+source), and **local**. It never calls an AI model, needs no API key, and sends nothing anywhere.
 
 ---
 
@@ -70,17 +51,61 @@ reasonable in the diff. A week later:
 
 Nothing was "wrong" at any single step. The codebase still drifted.
 
-Little Owl Code is a deterministic, read-only layer that answers the questions your diff cannot:
-
-- What changed?
-- Did the codebase get worse?
-- Did the architecture drift?
-- Did the assistant touch things outside the intended scope?
-- What is new, and what was already there?
-- What should I ask the AI to fix next?
-
 **Little Owl Code is not the AI. It is the second pair of eyes watching what the AI does to your
 codebase.**
+
+## See it in action
+
+After your assistant finishes, ask what it did:
+
+```bash
+little-owl review
+```
+
+```
+╭──────────────────────────────────────────────╮
+│  🦉 CODEBASE REVIEW                          │
+╰──────────────────────────────────────────────╯
+
+12 files changed (uncommitted changes vs HEAD)
++486 -73 lines   across 3 areas
+
+✗ DEGRADED
+
+Architecture     91 →  84 ↓
+Maintainability  87 →  87   ·
+Complexity       84 →  71 ↓
+Dependencies     95 →  94 ↓
+Type Safety      91 →  87 ↓
+Overall          89 →  83 ↓
+
+Since the baseline: +1 circular dependency, +2 skipped-layer imports
+
+🔴 1 critical   🟡 3 warnings
+
+FINDINGS
+
+🔴 architecture  ui imports infrastructure directly
+   components/Orders.tsx:4
+
+   components/Orders.tsx imports lib/db/client.ts, skipping the application
+   layer. The structure detected in this project is ui -> application ->
+   infrastructure.
+
+   found:    ui -> infrastructure
+   expected: ui -> application -> infrastructure
+
+   → Route the call through application instead of importing infrastructure
+   from here.
+```
+
+Reading that output:
+
+- **The arrows are the point.** `91 → 84` is the distance from your baseline, not an absolute grade.
+- **"Since the baseline"** names the counts behind the movement. Every score change traces back to
+  something you can go and look at.
+- **Only what this change introduced** is listed. Pre-existing debt stays quiet.
+- **Each finding says what, where, why it matters, and what to do.**
 
 ## Why a linter is not enough
 
@@ -98,44 +123,7 @@ before this change?"_ That question needs three things a line-level linter does 
 | Architecture      | mostly no          | layers, cycles, boundaries            |
 | Scope             | n/a                | did this change stay where it should? |
 
-It is also not a security scanner, not a test runner, and not a code formatter. Those tools already
-exist and are better at their jobs.
-
-## Install
-
-```bash
-npm install -D little-owl-code
-```
-
-or run it without installing:
-
-```bash
-npx little-owl-code
-```
-
-Requires Node.js 18.18 or newer. After installing, the binary is available as `little-owl`:
-
-```bash
-npx little-owl check
-```
-
-> **Note on the name:** the npm package is `little-owl-code`. The unrelated package name
-> `little-owl` is already taken on npm by a different project, so `npx little-owl` will not fetch
-> this tool — use `npx little-owl-code`. Once installed, the `little-owl` command is yours.
-
-## Quick start
-
-```bash
-# 1. Set up: detects your structure, writes config, records a baseline
-npx little-owl-code init
-
-# 2. Let your AI assistant do its thing
-
-# 3. See what it did
-npx little-owl review
-```
-
-Running `little-owl` with no arguments opens interactive mode, which is the friendliest way in.
+Run both. They are not competing.
 
 ## The three ideas
 
@@ -180,23 +168,93 @@ Since the baseline: +2 circular dependencies, +3 skipped-layer imports, +812 lin
 Every score change can be traced back to concrete counts. A number you cannot explain is not worth
 showing.
 
+## The AI development loop
+
+This is what the product is for.
+
+```
+little-owl init
+        ↓
+your AI assistant makes changes
+        ↓
+little-owl review          what did that do to the project?
+        ↓
+little-owl prompt          a brief built from the real findings
+        ↓
+your AI assistant fixes them
+        ↓
+little-owl review          again — against the SAME baseline
+```
+
+The last step is the one that makes the loop honest. Reviewing the fix against the same reference is
+what stops the second pass from quietly accepting the damage of the first.
+
+Little Owl writes the prompt; **you** paste it into Claude Code, Cursor, Codex, Copilot or whatever
+you use. There is no integration with any of them, and none is needed — the output is text.
+
+## Install
+
+```bash
+npm install -D little-owl-code
+```
+
+or run it without installing:
+
+```bash
+npx little-owl-code
+```
+
+Requires Node.js 18.18 or newer. After installing, the binary is available as `little-owl`:
+
+```bash
+npx little-owl check
+```
+
+> **Note on the name:** the npm package is `little-owl-code`. The unrelated package name
+> `little-owl` is already taken on npm by a different project, so `npx little-owl` will not fetch
+> this tool — use `npx little-owl-code`. Once installed, the `little-owl` command is yours.
+
+## Quick start
+
+```bash
+# 1. Set up: detects your structure, writes config, records a baseline
+npx little-owl-code init
+
+# 2. Let your AI assistant do its thing
+
+# 3. See what it did
+npx little-owl-code review
+```
+
+If there are findings worth fixing:
+
+```bash
+npx little-owl-code prompt
+```
+
+Running `little-owl` with no arguments opens interactive mode, which is the friendliest way in.
+
 ## Commands
 
-**Watching what changes**
+**Get started**
+
+| Command            | What it does                     |
+| ------------------ | -------------------------------- |
+| `little-owl`       | Interactive mode                 |
+| `little-owl init`  | Set up config and a baseline     |
+| `little-owl check` | Health of the codebase right now |
+
+**Reviewing changes**
 
 | Command               | What it does                             |
 | --------------------- | ---------------------------------------- |
-| `little-owl`          | Interactive mode                         |
-| `little-owl init`     | Set up config and a baseline             |
-| `little-owl check`    | Health of the codebase right now         |
 | `little-owl review`   | What did the recent changes do?          |
 | `little-owl watch`    | Report drift while you work              |
 | `little-owl baseline` | Record the reference state               |
 | `little-owl compare`  | Recent reviews against the same baseline |
 | `little-owl prompt`   | Write a brief for your AI assistant      |
-| `little-owl ci`       | Non-interactive check with an exit code  |
 
-**Understanding what is there** — see [docs/exploring.md](https://github.com/miguelGuarrochena/littleowlcode/blob/main/docs/exploring.md)
+**Exploring a codebase** — see [docs/exploring.md](https://github.com/miguelGuarrochena/littleowlcode/blob/main/docs/exploring.md)
 
 | Command                     | What it does                                            |
 | --------------------------- | ------------------------------------------------------- |
@@ -205,57 +263,39 @@ showing.
 | `little-owl impact [file]`  | What could changing this affect?                        |
 | `little-owl tests`          | Behaviour no test appears to watch                      |
 | `little-owl dead-code`      | Files nothing appears to reach                          |
-| `little-owl architecture`   | Detected layers and boundary violations                 |
-| `little-owl dependencies`   | Declared vs actually imported packages                  |
-| `little-owl config`         | Settings in effect (`--rules` to list every rule)       |
-| `little-owl doctor`         | Is Little Owl seeing this project properly?             |
+
+**Analysis**
+
+| Command                   | What it does                            |
+| ------------------------- | --------------------------------------- |
+| `little-owl architecture` | Detected layers and boundary violations |
+| `little-owl dependencies` | Declared vs actually imported packages  |
+
+**CI, configuration and diagnostics**
+
+| Command             | What it does                                      |
+| ------------------- | ------------------------------------------------- |
+| `little-owl ci`     | Non-interactive check with an exit code           |
+| `little-owl config` | Settings in effect (`--rules` to list every rule) |
+| `little-owl doctor` | Is Little Owl seeing this project properly?       |
 
 Useful flags: `--json`, `--details`, `--quiet`, `--scope`, `--base <ref>`, `-C <dir>`, `--no-color`,
 `--no-cache` (analyse without writing anything to the project).
 
 ### review
 
-The main event. It inspects the current git changes — added, modified, deleted and renamed files —
+The main command. It inspects the current git changes — added, modified, deleted and renamed files —
 re-analyses the project, and compares against the baseline.
-
-```
-╭──────────────────────────────────────────────╮
-│  🦉 CODEBASE REVIEW                          │
-╰──────────────────────────────────────────────╯
-
-12 files changed (uncommitted changes vs HEAD)
-
-⚠ NEEDS REVIEW
-
-Architecture     91 →  84 ↓
-Maintainability  87 →  87   ·
-Complexity       84 →  71 ↓
-Dependencies     95 →  94 ↓
-Type Safety      91 →  87 ↓
-Overall          89 →  83 ↓
-
-Since the baseline: +1 circular dependency, +2 skipped-layer imports
-
-🔴 1 critical   🟡 3 warnings
-
-FINDINGS
-
-🔴 architecture  ui imports infrastructure directly
-   components/Orders.tsx:4
-
-   components/Orders.tsx imports lib/db/client.ts, skipping the application
-   layer. The structure detected in this project is ui -> application ->
-   infrastructure.
-
-   found:    ui -> infrastructure
-   expected: ui -> application -> infrastructure
-
-   → Route the call through application instead of importing infrastructure
-   from here.
-```
 
 By default only the highest-signal findings are shown, and only what is _new_ since the baseline.
 Existing debt is not repeated at you every run. `--details` shows everything.
+
+```bash
+little-owl review                              # vs whatever changed recently
+little-owl review --base origin/main           # vs a specific ref
+little-owl review --scope "features/orders/**" # and flag anything outside that
+little-owl review --details                    # every finding, not just the new ones
+```
 
 ### watch
 
@@ -270,9 +310,9 @@ terminal 1:  npm run dev
 terminal 2:  little-owl watch
 ```
 
-Watch mode stays quiet unless something actually drifted. It measures against a fixed reference
-(your baseline if you have one), not against the state a second ago — otherwise slow degradation
-would never register.
+Watch mode stays quiet unless something actually drifted. It measures against a fixed reference (your
+baseline if you have one), not against the state a second ago — otherwise slow degradation would
+never register.
 
 **What it actually does on each save.** Every run is a full analysis: the whole dependency graph is
 rebuilt and every rule runs again. What is incremental is _parsing_ — files you have not touched are
@@ -331,7 +371,9 @@ Paste that into Claude Code, Cursor, Codex, Copilot, or whatever you use. Then r
 AI change → review → findings → AI fix → review → compare to the SAME baseline → accept or reject
 ```
 
-Little Owl never calls a model, needs no API key, and sends nothing anywhere.
+The instructions are built only from findings that actually exist, capped so the list stays
+actionable. **Little Owl never calls a model, needs no API key, and sends nothing anywhere.** It
+writes the text; you decide what to do with it.
 
 ### ci
 
@@ -349,7 +391,7 @@ little-owl ci --all                   # count pre-existing findings too
 little-owl ci --max-drop 3            # fail if the overall score falls more than 3
 ```
 
-## GitHub Action
+#### GitHub Action
 
 ```yaml
 name: Little Owl Code
@@ -389,69 +431,11 @@ little-owl dead-code                 # what does nothing reach any more
 little-owl doctor                    # is Little Owl seeing this project properly
 ```
 
-Each of these reports how much to trust it. `explain` states whether the evidence
-is `strong`, `partial` or `none`, and says plainly when the history records no
-reason rather than inventing one. `dead-code` grades every candidate `high`,
-`medium` or `low` and lists what undermines the conclusion. `impact` reports a
-`risk` level and lowers its `confidence` when a dynamic import could reach
-further than it can see.
-
-## Configuration
-
-`little-owl init` writes `.little-owl/config.ts`:
-
-```ts
-import { defineConfig } from 'little-owl-code';
-
-export default defineConfig({
-  strictness: 'balanced', // 'relaxed' | 'balanced' | 'strict'
-
-  architecture: {
-    // Layers top to bottom. A layer may depend on the one below it.
-    layers: {
-      ui: ['app', 'components'],
-      application: ['services', 'domain'],
-      data: ['repositories', 'lib/db'],
-    },
-    layerPolicy: 'adjacent', // 'adjacent' | 'downward'
-    featureRoot: 'features',
-    forbidden: [['components/**', 'lib/db/**']],
-  },
-
-  thresholds: {
-    maxFileLines: 800,
-    maxFunctionLines: 100,
-    maxComponentLines: 800,
-    maxComplexity: 15,
-  },
-
-  rules: {
-    'architecture/circular-dependency': 'error',
-    'architecture/layer-violation': 'error',
-    'architecture/layer-skip': 'warning',
-    'complexity/large-file': 'warning',
-  },
-
-  ignore: ['generated/**'],
-
-  ci: {
-    failOn: 'error',
-    maxOverallDrop: 5,
-  },
-});
-```
-
-Severities: `off` | `info` | `warning` | `error`. `little-owl config --rules` lists every rule with
-its current severity.
-
-`layerPolicy` decides how strict layering is. `adjacent` means UI may only use the layer directly
-below it, so `ui → data` is reported as a skipped layer. `downward` allows any lower layer.
-
-Config can also live at `.little-owl/config.{js,mjs,json}`, `little-owl.config.{ts,js,mjs,json}`,
-`.littleowlrc.{ts,js,mjs,json}`, or a bare `.littleowlrc` (JSON).
-
-If there is no config at all, Little Owl still works: it infers layers from your directory names and
-says so in the output. An inferred structure is a guess, and it is labelled as one.
+Each of these reports how much to trust it. `explain` states whether the evidence is `strong`,
+`partial` or `none`, and says plainly when the history records no reason rather than inventing one.
+`dead-code` grades every candidate `high`, `medium` or `low` and lists what undermines the
+conclusion. `impact` reports a `risk` level and lowers its `confidence` when a dynamic import could
+reach further than it can see.
 
 ## What it checks
 
@@ -492,6 +476,76 @@ Frameworks detected automatically: Next.js, React, Vue, Nuxt, Svelte, Angular, A
 NestJS, Fastify, Hono, Remix, Django, FastAPI, Flask, Go modules. Monorepos: pnpm workspaces, npm and
 yarn workspaces, Turborepo, Nx.
 
+## Configuration
+
+Everything is optional. `little-owl init` writes `.little-owl/config.ts`:
+
+```ts
+export default {
+  strictness: 'balanced', // 'relaxed' | 'balanced' | 'strict'
+
+  architecture: {
+    // Layers top to bottom. A layer may depend on the one below it.
+    layers: {
+      ui: ['app', 'components'],
+      application: ['services', 'domain'],
+      data: ['repositories', 'lib/db'],
+    },
+    layerPolicy: 'adjacent', // 'adjacent' | 'downward'
+    featureRoot: 'features',
+    forbidden: [['components/**', 'lib/db/**']],
+  },
+
+  thresholds: {
+    maxFileLines: 800,
+    maxFunctionLines: 100,
+    maxComponentLines: 800,
+    maxComplexity: 15,
+  },
+
+  rules: {
+    'architecture/circular-dependency': 'error',
+    'architecture/layer-violation': 'error',
+    'architecture/layer-skip': 'warning',
+    'complexity/large-file': 'warning',
+  },
+
+  ignore: ['generated/**'],
+
+  ci: {
+    failOn: 'error',
+    maxOverallDrop: 5,
+  },
+};
+```
+
+Installing the package as a dev dependency gets you type checking on that file:
+
+```ts
+import { defineConfig } from 'little-owl-code';
+
+export default defineConfig({/* … */});
+```
+
+The generated config deliberately does not import anything, so it keeps working when Little Owl is
+run through `npx` and never installed into the project.
+
+**`strictness`** picks the preset every threshold and several rule severities start from.
+
+**`layerPolicy`** decides how strict layering is. `adjacent` means UI may only use the layer directly
+below it, so `ui → data` is reported as a skipped layer. `downward` allows any lower layer.
+
+**Severities** are `off` | `info` | `warning` | `error`. `little-owl config --rules` lists every rule
+with its current severity.
+
+**`ignore`** adds glob patterns on top of the built-in list; your root `.gitignore` is read as well.
+
+Config can also live at `.little-owl/config.{js,mjs,json}`, `little-owl.config.{ts,js,mjs,json}`,
+`.littleowlrc.{ts,js,mjs,json}`, or a bare `.littleowlrc` (JSON).
+
+If there is no config at all, Little Owl still works: it infers layers from your directory names and
+says so in the output. An inferred structure is a guess, and it is labelled as one.
+
 ## Limitations
 
 Worth being straight about:
@@ -510,7 +564,9 @@ Worth being straight about:
 - **Impact analysis is reachability, not proof.** "Potentially affected" means exactly that.
 - **Unused-dependency detection can be wrong.** Packages loaded through configuration or at runtime
   look unused. The finding is a prompt to check, not a verdict.
-- **Duplicate detection is textual.** It finds copy-paste, not semantically equivalent code.
+- **Duplicate detection is textual.** It finds copy-paste, not semantically equivalent code, and it
+  only reports a block once it reaches `minDuplicateLines` — 8 by default, 6 under `strict`. Two
+  near-identical six-line helpers will not be reported at the default setting.
 - **Dead code detection is reachability, not proof.** Framework conventions, dynamic imports and
   configuration keep files alive without an import. Confidence levels say how much each candidate
   can be trusted, and Little Owl never deletes anything. Unused _exports_ are reported too, but only
@@ -532,15 +588,19 @@ Worth being straight about:
 
 Little Owl Code is **read-only** and **offline**.
 
-- It never modifies your application source code. It only writes to `.little-owl/`.
-- It never commits, stages, checks out or pushes anything.
-- `.little-owl/config.ts` and `.little-owl/baseline.json` are meant to be committed — they are what
-  your team agreed on. `.little-owl/cache/` (the parse cache) and `.little-owl/history.json` (your
-  local review log) are machine state. Little Owl writes `.little-owl/.gitignore` covering those two
-  the first time it writes anything there, so the cache cannot drift into a pull request. An ignore
-  file you already have is extended, never overwritten.
-- It sends no code, no metrics and no telemetry anywhere.
-- It requires no API key and calls no AI service.
+- **No network calls.** There is no networking code in the package to audit.
+- **No telemetry.** Not opt-out — absent.
+- **No API key, and no AI service.** Little Owl never calls a model.
+- **It never modifies your application source code.** It only writes to `.little-owl/`.
+- **It never commits, stages, checks out or pushes anything.** Git is read from, never written to.
+
+`.little-owl/config.ts` and `.little-owl/baseline.json` are meant to be committed — they are what
+your team agreed on. `.little-owl/cache/` (the parse cache) and `.little-owl/history.json` (your
+local review log) are machine state. Little Owl writes `.little-owl/.gitignore` covering those two
+the first time it writes anything there, so the cache cannot drift into a pull request. An ignore
+file you already have is extended, never overwritten.
+
+Every command that analyses a project also accepts `--no-cache`, which writes nothing at all.
 
 See [SECURITY.md](https://github.com/miguelGuarrochena/littleowlcode/blob/main/SECURITY.md).
 
@@ -572,6 +632,8 @@ pnpm check   # typecheck + lint + test + build
 Not in this version, possibly later: VS Code extension, GitHub PR bot, GitLab integration, optional
 AI provider integration, architecture visualisation, historical dashboards, team and organisation
 policies, and more language adapters (Rust, Java, C#, Kotlin, PHP).
+
+None of these exist today.
 
 ## Support
 

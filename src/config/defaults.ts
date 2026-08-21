@@ -22,6 +22,12 @@ export const DEFAULT_IGNORE = [
   '**/*.min.js',
   '**/*.d.ts',
   '**/.little-owl/**',
+  '**/playwright-report/**',
+  '**/test-results/**',
+  '**/storybook-static/**',
+  '**/.vercel/**',
+  '**/.output/**',
+  '**/.astro/**',
 ];
 
 export const THRESHOLD_PRESETS: Record<Strictness, Thresholds> = {

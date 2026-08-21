@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import type { ChangeSet, ChangedFile } from '../core/types.js';
+import { NEVER_ANALYSED } from '../core/scan.js';
 
 /**
  * Git access through plain subprocesses. Little Owl only ever reads: it never
@@ -171,10 +172,21 @@ export const detectChanges = (root: string, query: ChangeQuery = {}): ChangeSet 
 /** Little Owl's own files are not part of the change being reviewed. */
 const SELF_MANAGED = /^\.little-owl\//;
 
+/**
+ * Whether a path lives somewhere that is never project source.
+ *
+ * `git ls-files --others` honours .gitignore, so a project without one reports
+ * every installed dependency as an untracked change — turning a seven-file edit
+ * into "235 files changed". Those directories are not part of anybody's change.
+ */
+const isNotProjectSource = (path: string): boolean =>
+  path.split('/').some((segment) => NEVER_ANALYSED.has(segment));
+
 const dedupe = (files: ChangedFile[]): ChangedFile[] => {
   const byPath = new Map<string, ChangedFile>();
   for (const file of files) {
     if (SELF_MANAGED.test(file.path)) continue;
+    if (isNotProjectSource(file.path)) continue;
     const existing = byPath.get(file.path);
     if (!existing) {
       byPath.set(file.path, file);
