@@ -1,15 +1,25 @@
-# 🦉 Little Owl Code
+<p align="center">
+  <img src="https://raw.githubusercontent.com/miguelGuarrochena/littleowlcode/main/assets/owl.png" alt="" width="112" height="112">
+</p>
 
-**A second pair of eyes for your codebase.**
+<h1 align="center">Little Owl Code</h1>
 
-Keep your codebase healthy while AI writes code.
+<p align="center"><strong>A second pair of eyes for your codebase.</strong></p>
 
-[![npm](https://img.shields.io/npm/v/little-owl-code.svg)](https://www.npmjs.com/package/little-owl-code)
-[![CI](https://github.com/miguelGuarrochena/littleowlcode/actions/workflows/ci.yml/badge.svg)](https://github.com/miguelGuarrochena/littleowlcode/actions/workflows/ci.yml)
-[![license](https://img.shields.io/npm/l/little-owl-code.svg)](./LICENSE)
-[![node](https://img.shields.io/node/v/little-owl-code.svg)](https://nodejs.org)
+<p align="center">Keep your codebase healthy while AI writes code.</p>
 
-[littleowlcode.com](https://littleowlcode.com) · [Documentation](https://littleowlcode.com/docs) · [Report a false positive](https://github.com/miguelGuarrochena/littleowlcode/issues/new?template=false_positive.yml)
+<p align="center">
+  <a href="https://www.npmjs.com/package/little-owl-code"><img src="https://img.shields.io/npm/v/little-owl-code.svg" alt="npm version"></a>
+  <a href="https://github.com/miguelGuarrochena/littleowlcode/actions/workflows/ci.yml"><img src="https://github.com/miguelGuarrochena/littleowlcode/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="https://github.com/miguelGuarrochena/littleowlcode/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/little-owl-code.svg" alt="MIT licence"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/little-owl-code.svg" alt="Node version"></a>
+</p>
+
+<p align="center">
+  <a href="https://littleowlcode.com">littleowlcode.com</a> ·
+  <a href="https://littleowlcode.com/docs">Documentation</a> ·
+  <a href="https://github.com/miguelGuarrochena/littleowlcode/issues/new?template=false_positive.yml">Report a false positive</a>
+</p>
 
 ```bash
 npx little-owl-code
@@ -186,7 +196,7 @@ showing.
 | `little-owl prompt`   | Write a brief for your AI assistant      |
 | `little-owl ci`       | Non-interactive check with an exit code  |
 
-**Understanding what is there** — see [docs/exploring.md](./docs/exploring.md)
+**Understanding what is there** — see [docs/exploring.md](https://github.com/miguelGuarrochena/littleowlcode/blob/main/docs/exploring.md)
 
 | Command                     | What it does                                            |
 | --------------------------- | ------------------------------------------------------- |
@@ -368,7 +378,7 @@ Commit `.little-owl/baseline.json` so CI compares against the state your team ag
 ## Understanding an unfamiliar codebase
 
 Five commands that explain rather than judge. Full details in
-[docs/exploring.md](./docs/exploring.md).
+[docs/exploring.md](https://github.com/miguelGuarrochena/littleowlcode/blob/main/docs/exploring.md).
 
 ```bash
 little-owl map                       # where is everything, what should I read first
@@ -532,7 +542,7 @@ Little Owl Code is **read-only** and **offline**.
 - It sends no code, no metrics and no telemetry anywhere.
 - It requires no API key and calls no AI service.
 
-See [SECURITY.md](./SECURITY.md).
+See [SECURITY.md](https://github.com/miguelGuarrochena/littleowlcode/blob/main/SECURITY.md).
 
 ## Programmatic use
 
@@ -550,7 +560,7 @@ for (const finding of result.findings) {
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md).
+See [CONTRIBUTING.md](https://github.com/miguelGuarrochena/littleowlcode/blob/main/CONTRIBUTING.md).
 
 ```bash
 pnpm install
@@ -567,7 +577,7 @@ policies, and more language adapters (Rust, Java, C#, Kotlin, PHP).
 
 - **Bugs and false positives** — [open an issue](https://github.com/miguelGuarrochena/littleowlcode/issues).
   There is a template specifically for false positives, and they are triaged as bugs.
-- **Security** — see [SECURITY.md](./SECURITY.md). Report privately, not as a public issue.
+- **Security** — see [SECURITY.md](https://github.com/miguelGuarrochena/littleowlcode/blob/main/SECURITY.md). Report privately, not as a public issue.
 - **Anything else** — `info@littleowlcode.com`.
 
 ## License
