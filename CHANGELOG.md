@@ -4,6 +4,13 @@ Notable changes to Little Owl Code. Dates are release dates; the format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses
 [semantic versioning](https://semver.org/) — while it is on `0.x`, breaking changes bump the minor.
 
+## [0.2.1] — 2026-08-24
+
+### Fixed
+
+- `little-owl review` said "1 older issues are still open". It now says "1 older issue is
+  still open", and keeps the plural above one.
+
 ## [0.2.0] — 2026-08-23
 
 The report was rewritten around one question: after reading this, do you know what to do next?
@@ -109,6 +116,7 @@ The parse cache format changed, so the first run after upgrading re-parses every
 
 First public release.
 
+[0.2.1]: https://github.com/miguelGuarrochena/littleowlcode/releases/tag/v0.2.1
 [0.2.0]: https://github.com/miguelGuarrochena/littleowlcode/releases/tag/v0.2.0
 [0.1.3]: https://github.com/miguelGuarrochena/littleowlcode/releases/tag/v0.1.3
 [0.1.2]: https://github.com/miguelGuarrochena/littleowlcode/releases/tag/v0.1.2

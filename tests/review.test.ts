@@ -15,6 +15,8 @@ import { analyzeImpact } from '../src/review/impact.js';
 import { generatePrompt } from '../src/prompts/generate.js';
 import { renderReview } from '../src/output/review-report.js';
 import { evaluateCi } from '../src/cli/commands/ci.js';
+import { reviewNextStep } from '../src/cli/commands/review.js';
+import type { Issue } from '../src/output/issue.js';
 import { reviewToJson, SCHEMA_VERSION } from '../src/output/json.js';
 import { detectChanges } from '../src/git/git.js';
 import type { Finding, Metrics, ReviewResult } from '../src/core/types.js';
@@ -660,5 +662,43 @@ describe('review status without a baseline', () => {
 
   it('goes back to judging the change once a baseline exists', () => {
     expect(determineStatus([warning], null, null, true)).toBe('needs-review');
+  });
+});
+
+describe('the next step after a review', () => {
+  const issue = (number: number): Issue => ({
+    number,
+    id: 'complexity/large-file',
+    fingerprint: `f${number}`,
+    severity: 'warning',
+    category: 'complexity',
+    title: `issue ${number}`,
+    message: 'm',
+  });
+
+  it('agrees with itself about one older issue', () => {
+    const [step] = reviewNextStep([], [issue(1)]);
+
+    expect(step.command).toBe('little-owl check');
+    expect(step.note).toBe('1 older issue is still open');
+  });
+
+  it('keeps the plural for more than one', () => {
+    const [step] = reviewNextStep([], [issue(1), issue(2)]);
+
+    expect(step.note).toBe('2 older issues are still open');
+  });
+
+  it('points at the new issues when the change introduced any', () => {
+    const [step] = reviewNextStep([issue(1)], [issue(1), issue(2)]);
+
+    expect(step.command).toBe('little-owl explain 1');
+  });
+
+  it('offers a baseline when nothing is open at all', () => {
+    const [step, extra] = reviewNextStep([], []);
+
+    expect(step.command).toBe('little-owl baseline');
+    expect(extra).toEqual([]);
   });
 });

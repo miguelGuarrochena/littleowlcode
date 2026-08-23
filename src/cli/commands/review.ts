@@ -7,6 +7,7 @@ import { writeSnapshot } from '../../baseline/snapshot.js';
 import { generatePrompt } from '../../prompts/generate.js';
 import { printJson, reviewToJson } from '../../output/json.js';
 import { countBySeverity } from '../../output/report.js';
+import { countLabel } from '../../output/ui.js';
 import { renderReview } from '../../output/review-report.js';
 import { colors, dim } from '../../output/theme.js';
 import { divider, owlHeader, renderNextStep } from '../../output/guided.js';
@@ -116,7 +117,7 @@ const reviewQuery = (
   ...(options.cache === false ? { cache: false } : {}),
 });
 
-const reviewNextStep = (
+export const reviewNextStep = (
   issues: Issue[],
   allIssues: Issue[],
 ): [{ command: string; note?: string }, Array<{ command: string; note?: string }>] => {
@@ -132,7 +133,14 @@ const reviewNextStep = (
   }
   if (allIssues.length > 0) {
     return [
-      { command: 'little-owl check', note: `${allIssues.length} older issues are still open` },
+      {
+        command: 'little-owl check',
+        note: countLabel(
+          allIssues.length,
+          'older issue is still open',
+          'older issues are still open',
+        ),
+      },
       [{ command: 'little-owl baseline', note: 'record this state as the new reference' }],
     ];
   }

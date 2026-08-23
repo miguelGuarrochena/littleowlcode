@@ -1,6 +1,6 @@
 {
   "name": "little-owl-code",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A second pair of eyes for your codebase. Keep your codebase healthy while AI writes code.",
   "keywords": [
     "code-quality",
