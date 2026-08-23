@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command, Option } from 'commander';
 import { readVersion, printError } from './runtime.js';
+import { asOwlError, renderOwlError } from './errors.js';
 import { interactiveCommand } from './interactive.js';
 import { checkCommand } from './commands/check.js';
 import { reviewCommand } from './commands/review.js';
@@ -11,6 +12,9 @@ import { architectureCommand, dependenciesCommand, impactCommand } from './comma
 import { configCommand } from './commands/config.js';
 import { ciCommand } from './commands/ci.js';
 import { promptCommand } from './commands/prompt.js';
+import { explainIssueCommand, fixCommand } from './commands/issue.js';
+import { verifyCommand } from './commands/verify.js';
+import { agentCommand } from './commands/agent.js';
 import {
   deadCodeCommand,
   doctorCommand,
@@ -32,17 +36,30 @@ program
   .option('-C, --cwd <dir>', 'run against another directory')
   .option('--no-color', 'disable coloured output')
   .helpOption('-h, --help', 'show help')
-  // Seventeen commands with no starting point is a wall. And the npm name is
+  // Twenty commands with no starting point is a wall, so the five that make up
+  // the loop go *above* the list rather than below it — help text after the
+  // commands is help text nobody scrolls to. And the npm name is
   // `little-owl-code`: `npx little-owl` fetches an unrelated package, which is
   // worth saying where people actually look.
   .addHelpText(
-    'after',
+    'before',
     [
       '',
-      'New here:',
-      '  little-owl doctor    can Little Owl see this project properly?',
-      '  little-owl init      declare your layers and record a baseline',
-      '  little-owl review    what did the last change do?',
+      'Start here — the whole loop is five commands:',
+      '',
+      '  little-owl init        set up. No questions, takes a few seconds.',
+      '  little-owl check       what needs attention, most important first',
+      '  little-owl explain 1   what issue #1 means, in plain language',
+      '  little-owl fix 1       everything needed to fix it, incl. an AI brief',
+      '  little-owl verify 1    confirm the fix actually landed',
+      '',
+      'Everything else is optional. Run `little-owl` on its own for a menu.',
+      '',
+    ].join('\n'),
+  )
+  .addHelpText(
+    'after',
+    [
       '',
       'Installed from npm as `little-owl-code` — `npx little-owl-code <command>`.',
       'Docs: https://littleowlcode.com/docs',
@@ -67,23 +84,100 @@ const list = (value: string, previous: string[] = []): string[] => {
 
 program
   .command('init')
-  .description('set up .little-owl/config.ts and an initial baseline')
-  .option('-y, --yes', 'accept the defaults without asking')
+  .description('set Little Owl up for this project (asks nothing)')
+  .option('-y, --yes', 'accept the defaults without asking (now the default)')
+  .option('-i, --interactive', 'choose the structure and strictness yourself')
   .option('--force', 'overwrite an existing configuration')
   .option('--no-baseline', 'skip creating a baseline')
+  .option('--no-agent-file', 'skip writing LITTLE_OWL.md for AI assistants')
   .action(async (options) => {
     await run(() => initCommand({ ...globals(), ...options }));
   });
 
 program
   .command('check')
-  .description('report the current health of the codebase')
+  .description('what needs attention in this project, most important first')
   .option('--json', 'machine-readable output')
-  .option('--details', 'show every finding')
+  .option('--all', 'list every issue, not just the first few')
+  .option('--details', 'the full explanation of every issue')
   .option('-q, --quiet', 'only the essentials')
   .option('--no-cache', 'ignore the parse cache')
   .action(async (options) => {
     await run(() => checkCommand({ ...globals(), ...options }));
+  });
+
+program
+  .command('explain')
+  .argument('<issue-or-file>', 'an issue number from `check`, or a file path')
+  .description('explain an issue in plain language (or a file, from git history)')
+  .option('--json', 'machine-readable output')
+  .option('--technical', 'include the rule id and raw evidence')
+  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
+  .action(async (target: string, options) => {
+    const issue = issueNumber(target);
+    await run(() =>
+      issue === null
+        ? explainCommand(target, { ...globals(), ...options })
+        : explainIssueCommand(issue, { ...globals(), ...options }),
+    );
+  });
+
+program
+  .command('fix')
+  .argument('[issue]', 'issue number from `check` (defaults to #1)')
+  .description('everything needed to fix one issue, including a brief for your AI')
+  .option('--brief', 'print only the AI brief, ready to pipe or copy')
+  .option('--json', 'machine-readable output')
+  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
+  .action(async (issue: string | undefined, options) => {
+    const number = issue === undefined ? 1 : issueNumber(issue);
+    if (number === null) {
+      printError(`'${issue}' is not an issue number. Run 'little-owl check' to see the list.`);
+      process.exitCode = 1;
+      return;
+    }
+    await run(() =>
+      fixCommand(number, { ...globals(), ...options, briefOnly: options.brief === true }),
+    );
+  });
+
+program
+  .command('verify')
+  .argument('[issue]', 'issue number to confirm (defaults to all of them)')
+  .description('check whether the fixes actually landed')
+  .option('--tests', "also run this project's own test command")
+  .option('--json', 'machine-readable output')
+  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
+  .action(async (issue: string | undefined, options) => {
+    const number = issue === undefined ? undefined : issueNumber(issue);
+    if (number === null) {
+      printError(`'${issue}' is not an issue number. Run 'little-owl check' to see the list.`);
+      process.exitCode = 1;
+      return;
+    }
+    await run(() => verifyCommand(number, { ...globals(), ...options }));
+  });
+
+program
+  .command('prompt')
+  .description('write a prompt for your AI assistant from the current findings')
+  .option('-b, --base <ref>', 'git ref to compare against')
+  .option('-s, --scope <glob>', 'area the change was meant to touch (repeatable)', list)
+  .option('--all', 'include findings that predate this change')
+  .option('--compact', 'a short numbered list instead of the full brief')
+  .option('-n, --max <count>', 'maximum number of issues to include', (value) =>
+    Number.parseInt(value, 10),
+  )
+  .action(async (options) => {
+    await run(() => promptCommand({ ...globals(), ...options }));
+  });
+
+program
+  .command('agent')
+  .description('write LITTLE_OWL.md, the briefing file for AI assistants')
+  .option('--force', 'overwrite an existing file')
+  .action(async (options) => {
+    await run(() => agentCommand({ ...globals(), ...options }));
   });
 
 program
@@ -111,41 +205,6 @@ program
   });
 
 program
-  .command('architecture')
-  .description('show the detected layers and boundary violations')
-  .option('--json', 'machine-readable output')
-  .option('--details', 'name every offending import')
-  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
-  .action(async (options) => {
-    await run(() => architectureCommand({ ...globals(), ...options }));
-  });
-
-program
-  .command('impact')
-  .argument('[file]', 'file to analyse (defaults to the current git changes)')
-  .description('show what changing a file could affect')
-  .option('-f, --files <paths>', 'additional files to analyse', list)
-  .option('-b, --base <ref>', 'git ref to compare against')
-  .option('--json', 'machine-readable output')
-  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
-  .action(async (file, options) => {
-    const files = [...(file ? [file] : []), ...((options.files as string[] | undefined) ?? [])];
-    await run(() =>
-      impactCommand({ ...globals(), ...options, ...(files.length > 0 ? { files } : {}) }),
-    );
-  });
-
-program
-  .command('dependencies')
-  .alias('deps')
-  .description('compare declared dependencies with what is actually imported')
-  .option('--json', 'machine-readable output')
-  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
-  .action(async (options) => {
-    await run(() => dependenciesCommand({ ...globals(), ...options }));
-  });
-
-program
   .command('baseline')
   .description('record the current state as the reference for future reviews')
   .option('-y, --yes', 'write without asking')
@@ -165,56 +224,27 @@ program
   });
 
 program
-  .command('config')
-  .description('show the configuration currently in effect')
-  .option('--rules', 'list every rule and its severity')
+  .command('map')
+  .description('a high-level map of the project')
   .option('--json', 'machine-readable output')
+  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
   .action(async (options) => {
-    await run(() => configCommand({ ...globals(), ...options }));
+    await run(() => mapCommand({ ...globals(), ...options }));
   });
 
 program
-  .command('ci')
-  .description('non-interactive check with an exit code')
-  .option('--json', 'machine-readable output')
+  .command('impact')
+  .argument('[file]', 'file to analyse (defaults to the current git changes)')
+  .description('show what changing a file could affect')
+  .option('-f, --files <paths>', 'additional files to analyse', list)
   .option('-b, --base <ref>', 'git ref to compare against')
-  .option('-s, --scope <glob>', 'area the change was meant to touch (repeatable)', list)
-  .addOption(
-    new Option('--fail-on <level>', 'severity that fails the build').choices([
-      'error',
-      'warning',
-      'never',
-    ]),
-  )
-  .option('--max-drop <points>', 'largest acceptable drop in the overall score', (value) =>
-    Number.parseInt(value, 10),
-  )
-  .option('--all', 'consider pre-existing findings too, not just new ones')
-  .action(async (options) => {
-    await run(() => ciCommand({ ...globals(), ...options }));
-  });
-
-program
-  .command('prompt')
-  .description('write a prompt for your AI assistant from the current findings')
-  .option('-b, --base <ref>', 'git ref to compare against')
-  .option('-s, --scope <glob>', 'area the change was meant to touch (repeatable)', list)
-  .option('--all', 'include findings that predate this change')
-  .option('-n, --max <count>', 'maximum number of instructions', (value) =>
-    Number.parseInt(value, 10),
-  )
-  .action(async (options) => {
-    await run(() => promptCommand({ ...globals(), ...options }));
-  });
-
-program
-  .command('explain')
-  .argument('<file>', 'the file to investigate')
-  .description('why does this code exist? (reads git history)')
   .option('--json', 'machine-readable output')
   .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
   .action(async (file, options) => {
-    await run(() => explainCommand(file, { ...globals(), ...options }));
+    const files = [...(file ? [file] : []), ...((options.files as string[] | undefined) ?? [])];
+    await run(() =>
+      impactCommand({ ...globals(), ...options, ...(files.length > 0 ? { files } : {}) }),
+    );
   });
 
 program
@@ -246,12 +276,53 @@ program
   });
 
 program
-  .command('map')
-  .description('a high-level map of the project')
+  .command('architecture')
+  .description('show the detected layers and boundary violations')
+  .option('--json', 'machine-readable output')
+  .option('--details', 'name every offending import')
+  .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
+  .action(async (options) => {
+    await run(() => architectureCommand({ ...globals(), ...options }));
+  });
+
+program
+  .command('dependencies')
+  .alias('deps')
+  .description('compare declared dependencies with what is actually imported')
   .option('--json', 'machine-readable output')
   .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
   .action(async (options) => {
-    await run(() => mapCommand({ ...globals(), ...options }));
+    await run(() => dependenciesCommand({ ...globals(), ...options }));
+  });
+
+program
+  .command('ci')
+  .description('non-interactive check with an exit code')
+  .option('--json', 'machine-readable output')
+  .option('-b, --base <ref>', 'git ref to compare against')
+  .option('-s, --scope <glob>', 'area the change was meant to touch (repeatable)', list)
+  .addOption(
+    new Option('--fail-on <level>', 'severity that fails the build').choices([
+      'error',
+      'warning',
+      'never',
+    ]),
+  )
+  .option('--max-drop <points>', 'largest acceptable drop in the overall score', (value) =>
+    Number.parseInt(value, 10),
+  )
+  .option('--all', 'consider pre-existing findings too, not just new ones')
+  .action(async (options) => {
+    await run(() => ciCommand({ ...globals(), ...options }));
+  });
+
+program
+  .command('config')
+  .description('show the configuration currently in effect')
+  .option('--rules', 'list every rule and its severity')
+  .option('--json', 'machine-readable output')
+  .action(async (options) => {
+    await run(() => configCommand({ ...globals(), ...options }));
   });
 
 program
@@ -314,13 +385,23 @@ const run = async (command: () => Promise<number> | number): Promise<void> => {
   try {
     process.exitCode = await command();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    printError(message);
+    // Everything that reaches here becomes an explanation with a way out of it.
+    // A bare message tells the reader the tool broke; it never tells them what
+    // to type next, and "what do I type next" is the only question they have.
+    process.stderr.write(renderOwlError(asOwlError(error)));
     if (process.env['LITTLE_OWL_DEBUG'] && error instanceof Error) {
       process.stderr.write(`${error.stack}\n`);
     }
     process.exitCode = 1;
   }
+};
+
+/** `3` and `#3` are issue numbers; `src/3.ts` is not. */
+const issueNumber = (value: string): number | null => {
+  const match = /^#?(\d+)$/.exec(value.trim());
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1]!, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
 program.parseAsync(process.argv).catch((error: unknown) => {

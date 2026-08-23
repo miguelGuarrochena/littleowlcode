@@ -9,7 +9,13 @@ import {
 import { detectChanges } from '../git/git.js';
 import { checkScope } from './scope.js';
 import { fingerprint } from '../utils/hash.js';
-import { sortFindings } from '../core/context.js';
+import { sortFindings, type AnalysisContext } from '../core/context.js';
+
+/** A review plus the analysis context it was produced from. */
+export interface Review {
+  review: ReviewResult;
+  context: AnalysisContext;
+}
 
 export interface ReviewOptions {
   root: string;
@@ -22,11 +28,18 @@ export interface ReviewOptions {
 
 const SCOPE_RULE = { id: 'scope/out-of-scope-change', category: 'scope' as const };
 
-export const runReview = async (options: ReviewOptions): Promise<ReviewResult> => {
+/**
+ * The review, and the analysis it came from.
+ *
+ * `runReview` is kept as the narrower function it always was, because it is
+ * public API; this is the variant the CLI uses, since every guided screen needs
+ * the dependency graph to answer "what else is involved here?".
+ */
+export const runReviewWithContext = async (options: ReviewOptions): Promise<Review> => {
   const config = await loadConfig(options.root);
   const changes = detectChanges(options.root, options.base ? { base: options.base } : {});
 
-  const { result } = await analyzeProject({
+  const { result, context } = await analyzeProject({
     root: options.root,
     config,
     changes,
@@ -44,7 +57,7 @@ export const runReview = async (options: ReviewOptions): Promise<ReviewResult> =
   const baseline = readBaseline(options.root);
   const comparison = baseline ? compareToBaseline(baseline, result) : null;
 
-  return {
+  const review: ReviewResult = {
     status: determineStatus(
       comparison?.newFindings ?? result.findings,
       comparison?.drift ?? null,
@@ -60,7 +73,12 @@ export const runReview = async (options: ReviewOptions): Promise<ReviewResult> =
     drift: comparison?.drift ?? null,
     configDrifted: configDriftedFromBaseline(baseline, config),
   };
+
+  return { review, context };
 };
+
+export const runReview = async (options: ReviewOptions): Promise<ReviewResult> =>
+  (await runReviewWithContext(options)).review;
 
 /**
  * Scope is not a configurable rule — it comes from what the developer said the

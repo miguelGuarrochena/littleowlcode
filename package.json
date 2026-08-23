@@ -11,7 +11,11 @@
     "cli",
     "dependency-graph",
     "circular-dependencies",
-    "technical-debt"
+    "technical-debt",
+    "nextjs",
+    "client-bundle",
+    "server-only",
+    "secrets"
   ],
   "homepage": "https://littleowlcode.com",
   "bugs": "https://github.com/miguelGuarrochena/littleowlcode/issues",
@@ -41,6 +45,7 @@
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {

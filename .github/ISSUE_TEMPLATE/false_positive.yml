@@ -12,7 +12,9 @@ body:
     id: rule
     attributes:
       label: Rule id
-      description: Shown in `--json` output as `id`.
+      description: >-
+        Run `little-owl explain <issue-number> --technical` and copy the line
+        marked `rule`. It is also in `--json` output as `id`.
       placeholder: patterns/duplicate-helper
     validations:
       required: true

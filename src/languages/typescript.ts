@@ -2,6 +2,11 @@ import ts from 'typescript';
 import type { FunctionInfo, ImportRef, Marker, ParsedFile } from '../core/types.js';
 import { hashContent } from '../utils/hash.js';
 import { countSloc, looksLikeTest, type LanguageAdapter, type ParseInput } from './adapter.js';
+import {
+  collectEffectsWithoutDeps,
+  collectEnvReads,
+  collectPathLiterals,
+} from './typescript-signals.js';
 
 const TS_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'];
 const JS_EXTENSIONS = ['.js', '.jsx', '.mjs', '.cjs'];
@@ -393,29 +398,6 @@ const comments = (source: ts.SourceFile, content: string): CommentRange[] => {
   return found;
 };
 
-/**
- * Lines where `useEffect` is called without a dependency array, meaning the
- * effect re-runs after every single render.
- */
-const collectEffectsWithoutDeps = (source: ts.SourceFile): number[] => {
-  const lines: number[] = [];
-
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      (node.expression.text === 'useEffect' || node.expression.text === 'useLayoutEffect') &&
-      node.arguments.length === 1
-    ) {
-      lines.push(source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1);
-    }
-    node.forEachChild(visit);
-  };
-
-  source.forEachChild(visit);
-  return lines;
-};
-
 const parseTypeScriptLike = (input: ParseInput, isTs: boolean): ParsedFile => {
   const source = createSourceFile(input);
   const lines = input.content.split('\n');
@@ -449,39 +431,11 @@ const parseTypeScriptLike = (input: ParseInput, isTs: boolean): ParsedFile => {
       serverOnlyImports: imports
         .filter((reference) => SERVER_ONLY_MODULES.includes(reference.raw))
         .map((reference) => reference.raw),
+      envReads: collectEnvReads(source),
       pathLiterals: collectPathLiterals(input.content),
     },
   };
 };
-
-/**
- * Quoted strings that name a file, outside of any import.
- *
- * Plenty of files are referenced without being imported: a jest config naming
- * its setup file, a service worker registered as `'/sw.js'`, a route table
- * built from paths. Reachability that only follows imports calls all of them
- * dead, so this is the trace that keeps them alive.
- */
-const PATH_LITERAL = /['"`]([^'"`\n\s]*\/[^'"`\n\s]*\.[A-Za-z0-9]{1,5})['"`]/g;
-
-/** Enough to cover a config file; a cap keeps a generated file from bloating the cache. */
-const MAX_PATH_LITERALS = 200;
-
-const collectPathLiterals = (content: string): string[] => {
-  const found = new Set<string>();
-  for (const match of content.matchAll(PATH_LITERAL)) {
-    found.add(normalizeLiteral(match[1]!));
-    if (found.size >= MAX_PATH_LITERALS) break;
-  }
-  return [...found];
-};
-
-/** Drops the prefixes tools put in front of a path: `./`, `/`, `<rootDir>/`. */
-const normalizeLiteral = (value: string): string =>
-  value
-    .replace(/^<[^>]+>\//, '')
-    .replace(/^\.{1,2}\//, '')
-    .replace(/^\//, '');
 
 export const typeScriptAdapter: LanguageAdapter = {
   language: 'typescript',

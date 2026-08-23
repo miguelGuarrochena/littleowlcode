@@ -1,7 +1,24 @@
 import type { Severity } from '../core/types.js';
 import type { CiConfig, ResolvedConfig, Strictness, Thresholds } from './schema.js';
 
-/** Directories that are never source code worth analysing. */
+/**
+ * Paths whose contents are not the application.
+ *
+ * Two kinds live here. Build output and dependencies are obvious. The second
+ * kind is less obvious and matters more: **sample code**.
+ *
+ * A `tests/fixtures/` directory in a linter, a `__mocks__` folder, an
+ * `examples/` directory in a library — these hold code that is deliberately
+ * wrong, deliberately tiny, or deliberately illustrative. Analysing it produces
+ * findings that are all true and all useless: "fix this circular dependency"
+ * pointing at a fixture named `circular-dependencies` is the fastest way to
+ * teach someone that this tool does not understand their project. Worse, acting
+ * on the advice breaks their test suite.
+ *
+ * The cost of being wrong in each direction is not symmetric. Missing real
+ * findings inside an `examples/` folder costs very little; drowning a first run
+ * in findings about sample code costs the user's trust in everything else.
+ */
 export const DEFAULT_IGNORE = [
   '**/node_modules/**',
   '**/.git/**',
@@ -28,6 +45,35 @@ export const DEFAULT_IGNORE = [
   '**/.vercel/**',
   '**/.output/**',
   '**/.astro/**',
+
+  // Sample code: deliberately broken, deliberately trivial, or illustrative.
+  '**/fixtures/**',
+  '**/__fixtures__/**',
+  '**/__mocks__/**',
+  '**/__snapshots__/**',
+  '**/testdata/**',
+  'examples/**',
+  'example/**',
+  '**/*.stories.*',
+  '**/*.fixture.*',
+];
+
+/**
+ * The subset of `DEFAULT_IGNORE` that holds sample code rather than build
+ * output. Reported separately by `init` and `doctor`, because excluding
+ * `node_modules` needs no explanation and excluding somebody's `examples/`
+ * directory does.
+ */
+export const SAMPLE_CODE_IGNORE = [
+  '**/fixtures/**',
+  '**/__fixtures__/**',
+  '**/__mocks__/**',
+  '**/__snapshots__/**',
+  '**/testdata/**',
+  'examples/**',
+  'example/**',
+  '**/*.stories.*',
+  '**/*.fixture.*',
 ];
 
 export const THRESHOLD_PRESETS: Record<Strictness, Thresholds> = {
@@ -96,6 +142,8 @@ export const DEFAULT_RULE_SEVERITIES: Record<string, Severity> = {
 
   'react/effect-dependency-risk': 'info',
   'next/server-import-in-client': 'error',
+  'next/secret-in-client-bundle': 'error',
+  'next/server-module-in-client-bundle': 'error',
 
   'python/bare-except': 'warning',
   'python/mutable-default': 'warning',

@@ -3,15 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { compilePattern, matchesAny } from '../src/utils/glob.js';
 import { fingerprint, hashContent } from '../src/utils/hash.js';
 import { dirOf, extname, topSegment, toPosix } from '../src/utils/paths.js';
-import {
-  visibleWidth,
-  wrap,
-  scoreBar,
-  metricLine,
-  box,
-  banner,
-  heading,
-} from '../src/output/ui.js';
+import { visibleWidth, wrap, scoreBar, metricLine, box, heading } from '../src/output/ui.js';
 
 describe('glob matching', () => {
   it('matches single-segment wildcards', () => {
@@ -86,8 +78,8 @@ describe('terminal rendering', () => {
 
   it('keeps every box line the same width, emoji included', () => {
     for (const rendered of [
-      banner(),
       heading('\u{1F989} CODEBASE REVIEW'),
+      heading('SHORT'),
       box(['plain'], { width: 30 }),
       box(['\u{1F534} 1 critical', 'short'], { width: 30 }),
     ]) {

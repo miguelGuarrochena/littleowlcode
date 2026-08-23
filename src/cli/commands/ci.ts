@@ -90,6 +90,14 @@ export const ciCommand = async (options: CiOptions): Promise<number> => {
 
   print('');
   print(verdict.passed ? 'result: pass' : `result: fail (${verdict.reasons.join('; ')})`);
+  // A red build should say what to run locally. Reading a CI log and guessing
+  // the command is the slowest possible way to start on a fix.
+  if (!verdict.passed) {
+    print('');
+    print('To work through these locally:');
+    print('  little-owl check      what needs attention, most important first');
+    print('  little-owl fix 1      everything needed to fix the first one');
+  }
   return verdict.exitCode;
 };
 

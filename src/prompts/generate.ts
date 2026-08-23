@@ -1,24 +1,45 @@
+import type { AnalysisContext } from '../core/context.js';
 import type { Finding, ReviewResult } from '../core/types.js';
+import { withNumbers, type Issue } from '../output/issue.js';
+import { countByPriority, PRIORITY_MEANING } from '../output/severity.js';
+import { detectCommands, verificationCommand } from '../detect/commands.js';
+import { renderIssueBrief } from './brief.js';
 
 /**
- * Turns findings into a short instruction list for an AI coding assistant.
+ * Turns findings into a brief for an AI coding assistant.
  *
  * Little Owl never calls a model. It writes the prompt, the developer decides
- * what to do with it. The prompt is deliberately small: a wall of findings is
- * exactly how a codebase ends up being rewritten twenty files at a time.
+ * what to do with it.
+ *
+ * Two shapes come out of here. The full brief is the default: it carries file,
+ * line, function, related files, expected behaviour, risks and acceptance
+ * criteria, because an assistant handed only "reduce the size of orders.ts"
+ * will go and rediscover all of that itself, and its version of the answer is
+ * a guess where Little Owl's is measured. The compact list is the original
+ * behaviour, kept for people piping this into something with a small context.
+ *
+ * Both stay deliberately short on issues: a wall of findings is exactly how a
+ * codebase ends up being rewritten twenty files at a time.
  */
 
 export interface PromptOptions {
-  /** Maximum number of numbered instructions. */
+  /** Maximum number of issues (or, in compact mode, instructions). */
   maxInstructions?: number;
   /** Restrict the assistant to these paths. */
   scope?: string[];
   /** Include findings that already existed before the change. */
   includeExisting?: boolean;
+  /** `full` (default) writes a complete brief; `compact` writes a numbered list. */
+  style?: 'full' | 'compact';
+  /** Internal: whether the pool is the current change or the whole codebase. */
+  aboutTheChange?: boolean;
+  /** Enables related files, enclosing functions and the project's own commands. */
+  context?: AnalysisContext;
+  root?: string;
 }
 
 export const generatePrompt = (review: ReviewResult, options: PromptOptions = {}): string => {
-  const maxInstructions = options.maxInstructions ?? 6;
+  const maxInstructions = options.maxInstructions ?? (options.style === 'compact' ? 6 : 4);
 
   // Whether the brief is about this change or about debt that predates it. The
   // two need different wording: telling an assistant to "review the current
@@ -26,45 +47,231 @@ export const generatePrompt = (review: ReviewResult, options: PromptOptions = {}
   // there, and it fixes whatever it finds instead.
   const aboutTheChange = !options.includeExisting && review.newFindings.length > 0;
   const pool = aboutTheChange ? review.newFindings : review.current.findings;
+  const scope = options.scope ?? review.scope?.patterns ?? [];
 
-  // Several findings can produce the same sentence — three skipped-layer
-  // imports in one file are three findings and one instruction. Deduplicating
-  // before the cap means the brief spends its places on distinct problems.
+  // Numbers come from the whole run, not from this brief, so `little-owl fix 3`
+  // means the same problem here as it does in `check`.
+  const actionable = withNumbers(pool, review.current.findings).filter(
+    (finding) => finding.severity !== 'info',
+  );
+
+  if (actionable.length === 0) {
+    return nothingToDo(review, scope, aboutTheChange || review.newFindings.length > 0);
+  }
+
+  if (options.style === 'compact') {
+    return compactBrief(review, actionable, scope, maxInstructions);
+  }
+
+  return fullBrief(review, actionable, scope, maxInstructions, {
+    ...options,
+    aboutTheChange,
+  });
+};
+
+const nothingToDo = (review: ReviewResult, scope: string[], scoped: boolean): string => {
+  const outstanding = review.current.findings.filter((finding) => finding.severity !== 'info');
+
+  // The trap this closes: `check` says "4 important", `prompt` says "nothing to
+  // fix", and the reader believes one of them at random. They were looking at
+  // different sets — this says which, and how to ask for the other.
+  const headline = scoped
+    ? 'The most recent change introduced nothing that needs fixing.'
+    : 'Little Owl found nothing that needs fixing right now.';
+
+  const lines = [
+    '# Little Owl Code',
+    '',
+    headline,
+    '',
+    'If you keep working in this codebase, keep the existing structure:',
+    '',
+    review.current.findings.length === 0
+      ? '- there are no outstanding findings'
+      : `- ${review.current.findings.length} low-priority findings exist and are being left alone on purpose`,
+    '- do not add dependencies for things a few lines of local code would do',
+    '- do not edit `.little-owl/baseline.json`',
+  ];
+  if (scope.length > 0) lines.push(`- do not modify files outside ${scope.join(', ')}`);
+
+  if (scoped && outstanding.length > 0) {
+    lines.push(
+      '',
+      `The project still has ${outstanding.length} open ` +
+        `${outstanding.length === 1 ? 'finding' : 'findings'} that predate this change ` +
+        '— the same ones `little-owl check` lists. To work on those instead:',
+      '',
+      '```bash',
+      'little-owl prompt --all',
+      '```',
+    );
+  }
+
+  lines.push('', 'When you have finished a change, run `little-owl review`.');
+  return lines.join('\n');
+};
+
+/**
+ * The full brief.
+ *
+ * Structured as markdown headings because that is what assistants parse most
+ * reliably, and because a human pasting it into a chat window still gets
+ * something readable.
+ */
+const fullBrief = (
+  review: ReviewResult,
+  actionable: Issue[],
+  scope: string[],
+  max: number,
+  options: PromptOptions,
+): string => {
+  const issues = pickIssues(actionable, max);
+  const counts = countByPriority(issues);
+  const remaining = actionable.length - issues.length;
+
+  const lines = [
+    '# Little Owl Code — fix brief',
+    '',
+    review.current.project.name ? `Project: **${review.current.project.name}**` : 'Project brief',
+    '',
+    intro(review, issues.length, remaining, options.aboutTheChange === true),
+    '',
+    '**Priority key**',
+    '',
+    ...(['critical', 'important', 'minor'] as const)
+      .filter((priority) => counts[priority] > 0)
+      .map((priority) => `- \`${priority}\` — ${PRIORITY_MEANING[priority]}`),
+    '',
+    '---',
+    '',
+  ];
+
+  for (const issue of issues) {
+    lines.push(
+      renderIssueBrief(issue, {
+        ...(options.context ? { context: options.context } : {}),
+        ...(options.root ? { root: options.root } : {}),
+        ...(scope.length > 0
+          ? { constraints: [`Do not modify files outside ${scope.join(', ')}.`] }
+          : {}),
+        standalone: false,
+      }),
+      '---',
+      '',
+    );
+  }
+
+  lines.push(
+    '## Order of work',
+    '',
+    'Fix the issues above one at a time, in the order given. Do not start the second',
+    'until the first is verified. If an issue turns out to be a false positive, say so',
+    'and move on rather than changing unrelated code to satisfy it.',
+    '',
+    '## When you are done',
+    '',
+    '```bash',
+    ...doneCommands(review, options),
+    '```',
+    '',
+  );
+
+  if (remaining > 0) {
+    lines.push(
+      `There are ${remaining} more findings below this priority. Leave them for a later pass.`,
+      '',
+    );
+  }
+
+  return lines.join('\n');
+};
+
+const intro = (
+  review: ReviewResult,
+  shown: number,
+  remaining: number,
+  aboutTheChange: boolean,
+): string => {
+  // Read from the pool that was actually used, not from whether a baseline
+  // happens to exist. `--all` deliberately widens to pre-existing debt, and the
+  // brief used to keep calling it "introduced by the most recent change" —
+  // sending the assistant to look for it in a diff that does not contain it.
+  const about = aboutTheChange
+    ? 'introduced by the most recent change'
+    : 'present in this codebase';
+  void review;
+  const scale =
+    remaining > 0
+      ? `the ${shown} most important of them`
+      : shown === 1
+        ? 'the one it found'
+        : `all ${shown} of them`;
+  return (
+    `Little Owl analysed the project and found problems ${about}. What follows is ${scale}, ` +
+    'with the file, the line and the expected behaviour already worked out. ' +
+    'You do not need to re-investigate any of it.'
+  );
+};
+
+const doneCommands = (review: ReviewResult, options: PromptOptions): string[] => {
+  const commands = ['little-owl verify', 'little-owl review'];
+  if (options.root && options.context) {
+    const project = verificationCommand(detectCommands(options.root, options.context.project));
+    if (project) commands.unshift(project);
+  } else {
+    void review;
+  }
+  return commands;
+};
+
+/**
+ * One issue per distinct problem.
+ *
+ * Three skipped-layer imports in one file are three findings and one piece of
+ * work; without this the brief spends all four of its places on the same file.
+ */
+const pickIssues = (findings: Issue[], max: number): Issue[] => {
+  const picked: Issue[] = [];
+  const seen = new Set<string>();
+
+  for (const finding of findings) {
+    const key = `${finding.id}:${finding.file ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    picked.push(finding);
+    if (picked.length >= max) break;
+  }
+
+  return picked;
+};
+
+/** The original short instruction list, kept for small-context consumers. */
+const compactBrief = (
+  review: ReviewResult,
+  actionable: Issue[],
+  scope: string[],
+  max: number,
+): string => {
   const ranked: string[] = [];
   const seen = new Set<string>();
 
-  for (const finding of byImportance(pool)) {
-    if (finding.severity === 'info') continue;
+  for (const finding of actionable) {
     const instruction = instructionFor(finding);
     if (seen.has(instruction)) continue;
     seen.add(instruction);
     ranked.push(instruction);
-    if (ranked.length >= maxInstructions) break;
+    if (ranked.length >= max) break;
   }
 
   const instructions = [...ranked];
-  const scope = options.scope ?? review.scope?.patterns ?? [];
-
-  if (scope.length > 0) {
-    instructions.push(`Do not modify files outside ${scope.join(', ')}.`);
-  }
+  if (scope.length > 0) instructions.push(`Do not modify files outside ${scope.join(', ')}.`);
   if (review.newFindings.some((finding) => finding.id === 'dependencies/new-dependency')) {
     instructions.push('Do not add any further dependencies.');
   }
   instructions.push('Preserve the existing behaviour and keep the tests passing.');
 
-  if (ranked.length === 0 && scope.length === 0) {
-    return [
-      'Little Owl Code found nothing that needs fixing in the current changes.',
-      '',
-      'If you continue working on this codebase, keep the existing structure:',
-      review.current.findings.length === 0
-        ? '- no outstanding findings'
-        : `- ${review.current.findings.length} pre-existing findings are being ignored on purpose`,
-    ].join('\n');
-  }
-
-  const lines = [
+  const aboutTheChange = review.newFindings.length > 0;
+  return [
     aboutTheChange
       ? 'Review the current changes using these constraints:'
       : 'These are pre-existing findings in this codebase, not the result of a recent change.\n' +
@@ -75,64 +282,7 @@ export const generatePrompt = (review: ReviewResult, options: PromptOptions = {}
     'After making changes, run:',
     '',
     '   little-owl review',
-  ];
-
-  return lines.join('\n');
-};
-
-/**
- * How much each rule tends to matter, lowest first.
- *
- * The report sorts findings for reading — severity, then category, then path —
- * which puts whatever is alphabetically first at the top of the brief. An
- * assistant given six instructions acts on all six, so a throwaway script in
- * `a...` would get refactored while a 4,000-line service goes untouched.
- */
-const RULE_PRIORITY: Record<string, number> = {
-  'architecture/circular-dependency': 0,
-  'scope/out-of-scope-change': 1,
-  'architecture/layer-violation': 1,
-  'next/server-import-in-client': 1,
-  'architecture/layer-skip': 2,
-  'architecture/cross-feature-import': 2,
-  'patterns/parallel-implementations': 3,
-  'patterns/duplicate-helper': 3,
-  'complexity/large-file': 4,
-  'complexity/large-component': 4,
-  'type-safety/suppression': 5,
-  'type-safety/explicit-any': 5,
-  'complexity/large-function': 6,
-  'complexity/high-complexity': 6,
-};
-
-const DEFAULT_PRIORITY = 7;
-const SEVERITY_RANK: Record<Finding['severity'], number> = { error: 0, warning: 1, info: 2 };
-
-const byImportance = (findings: Finding[]): Finding[] =>
-  [...findings].sort((a, b) => {
-    const bySeverity = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
-    if (bySeverity !== 0) return bySeverity;
-
-    const byRule =
-      (RULE_PRIORITY[a.id] ?? DEFAULT_PRIORITY) - (RULE_PRIORITY[b.id] ?? DEFAULT_PRIORITY);
-    if (byRule !== 0) return byRule;
-
-    // Worst offender first: five times over the limit before barely over it.
-    const byOvershoot = overshoot(b) - overshoot(a);
-    if (byOvershoot !== 0) return byOvershoot;
-
-    return (a.file ?? '') < (b.file ?? '') ? -1 : 1;
-  });
-
-/**
- * How far past its limit a finding is, as a multiple. Rules that carry a
- * `baseline` limit and a `current` measurement can be compared this way; the
- * rest all tie at 1 and fall through to the path.
- */
-const overshoot = (finding: Finding): number => {
-  const limit = typeof finding.baseline === 'number' ? finding.baseline : 0;
-  const actual = typeof finding.current === 'number' ? finding.current : 0;
-  return limit > 0 && actual > 0 ? actual / limit : 1;
+  ].join('\n');
 };
 
 /** Rule-specific phrasing, falling back to the finding's own suggestion. */

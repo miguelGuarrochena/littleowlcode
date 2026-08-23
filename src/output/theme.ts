@@ -24,10 +24,15 @@ export const icons = {
   bullet: '•',
 } as const;
 
+/**
+ * Icons match the three priority levels the reports talk in — critical,
+ * important, minor — so a 🟠 means the same thing wherever it appears.
+ * See `output/severity.ts` for the translation.
+ */
 export const severityIcon: Record<ReportedSeverity, string> = {
   error: '🔴',
-  warning: '🟡',
-  info: '🔵',
+  warning: '🟠',
+  info: '🟡',
 };
 
 export const severityColor = (severity: ReportedSeverity): ((text: string) => string) => {
@@ -37,7 +42,7 @@ export const severityColor = (severity: ReportedSeverity): ((text: string) => st
 };
 
 export const severityLabel = (severity: ReportedSeverity): string => {
-  return severity === 'error' ? 'critical' : severity === 'warning' ? 'warning' : 'info';
+  return severity === 'error' ? 'critical' : severity === 'warning' ? 'important' : 'minor';
 };
 
 export const statusText: Record<ReviewStatus, string> = {

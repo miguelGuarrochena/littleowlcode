@@ -18,7 +18,7 @@ import { ensureLocalGitignore } from '../config/load.js';
  * shape moves, so an entry missing a newly added field still looks valid and
  * the rules reading that field see nothing.
  */
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 
 interface CacheEntry {
   mtimeMs: number;

@@ -14,18 +14,44 @@ rules: {
 Severities: `off` | `info` | `warning` | `error`. Run `little-owl config --rules` to see what is
 active in your project right now.
 
+**When a finding is wrong.** Every static analyser is wrong sometimes, and only you can tell.
+`little-owl explain <n>` and `little-owl fix <n>` both end with the narrowest way to dismiss the
+finding — a path exclusion when the code is not your application, a threshold when you do not share
+the budget, or the rule off when you disagree with the rule. The exception is the client/server
+boundary rules, which are never offered a dismissal: a leaked credential is not a matter of taste.
+
+**Two vocabularies, one fact.** Rules are _configured_ with `error` / `warning` / `info`, matching
+every other linter config you have ever written. Reports _speak_ in priorities, because that is what
+tells a reader how urgently something needs their time:
+
+| Configured | Reported as      | Meaning                                                  |
+| ---------- | ---------------- | -------------------------------------------------------- |
+| `error`    | 🔴 **critical**  | Fix before your app goes live.                           |
+| `warning`  | 🟠 **important** | Fix soon — this gets more expensive the longer it waits. |
+| `info`     | 🟡 **minor**     | Improve when you have time. Nothing is broken.           |
+
+Both appear in `--json`, as `severity` and `priority`.
+
+**Every rule also carries a plain-language explanation** — what happened, why it matters for the
+running application, what should happen instead, how to fix it, and how to confirm the fix. That is
+what `little-owl explain <n>` prints, and what `little-owl prompt` writes into the brief for an AI
+assistant. Adding a rule means adding that explanation too; see
+[CONTRIBUTING.md](../CONTRIBUTING.md).
+
 ## Architecture
 
-| Rule                                | Relaxed | Balanced | Strict |
-| ----------------------------------- | ------- | -------- | ------ |
-| `architecture/circular-dependency`  | error   | error    | error  |
-| `architecture/layer-violation`      | error   | error    | error  |
-| `architecture/layer-skip`           | info    | warning  | error  |
-| `architecture/cross-feature-import` | info    | warning  | error  |
-| `architecture/forbidden-dependency` | error   | error    | error  |
-| `architecture/deep-import-chain`    | off     | info     | info   |
-| `architecture/unlayered-code`       | info    | info     | info   |
-| `next/server-import-in-client`      | error   | error    | error  |
+| Rule                                  | Relaxed | Balanced | Strict |
+| ------------------------------------- | ------- | -------- | ------ |
+| `architecture/circular-dependency`    | error   | error    | error  |
+| `architecture/layer-violation`        | error   | error    | error  |
+| `architecture/layer-skip`             | info    | warning  | error  |
+| `architecture/cross-feature-import`   | info    | warning  | error  |
+| `architecture/forbidden-dependency`   | error   | error    | error  |
+| `architecture/deep-import-chain`      | off     | info     | info   |
+| `architecture/unlayered-code`         | info    | info     | info   |
+| `next/server-import-in-client`        | error   | error    | error  |
+| `next/secret-in-client-bundle`        | error   | error    | error  |
+| `next/server-module-in-client-bundle` | error   | error    | error  |
 
 **`architecture/circular-dependency`** — files that import each other, directly or through a chain.
 A Python package whose `__init__.py` re-exports its own submodules is not reported: that loop is how
@@ -55,7 +81,76 @@ withheld — there is no model to judge.
 `maxImportDepth`.
 
 **`next/server-import-in-client`** — a `'use client'` module that imports a server-only package
-(`node:fs`, `pg`, `server-only`, …) or a `'use server'` module.
+(`node:fs`, `pg`, `server-only`, …) directly.
+
+### The client/server boundary
+
+Two rules answer one question: **starting from a component that runs in the browser, is there any
+path through your imports to code that was never meant to leave the server?**
+
+The shape this takes in practice:
+
+```
+components/Profile.tsx   "use client"
+      ↓ imports
+lib/user.ts
+      ↓ imports
+lib/db.ts                const url = process.env.DATABASE_URL
+```
+
+No file mentions the browser. Every import is reasonable on its own. And the whole chain is compiled
+into JavaScript that any visitor can open and read. A linter cannot see this, because no single file
+is wrong — it only exists in the relationship between three of them, which is the one thing Little
+Owl already has a map of.
+
+**`next/secret-in-client-bundle`** — a client component that can reach code reading a secret from
+`process.env`. The finding names the exact chain and the variable, and its guidance says to rotate
+the credential as well as fix the code: if the page has already been deployed, the value is public
+regardless of what you change now.
+
+**`next/server-module-in-client-bundle`** — the same walk, ending at a module that imports a
+server-only package instead. This breaks the build in the good case and ships server code in the bad
+one.
+
+#### What counts as a secret
+
+A variable is treated as a secret when its name contains one of `SECRET`, `TOKEN`, `PASSWORD`,
+`PRIVATE`, `CREDENTIAL`, `API_KEY`, `_KEY`, `DATABASE_URL`, `CONNECTION_STRING`, `WEBHOOK`,
+`SIGNING`, `SERVICE_ROLE`, `SALT`, `CERT`, `_DSN`, `AUTH` — unless it carries a prefix the bundler is
+designed to publish (`NEXT_PUBLIC_`, `PUBLIC_`, `VITE_`, `REACT_APP_`, `NUXT_PUBLIC_`,
+`EXPO_PUBLIC_`, `GATSBY_`, `STORYBOOK_`, `VUE_APP_`) or is build metadata (`NODE_ENV`, `VERCEL_URL`,
+`PORT`, `CI`, …). The public prefix always wins: `NEXT_PUBLIC_STRIPE_KEY` is a publishable key and
+reporting it would teach people to ignore the rule.
+
+#### What the walk deliberately does not follow
+
+These are the cases that make the difference between a rule people trust and one they turn off:
+
+- **`"use server"` modules.** A Server Action is _called_ from the browser, not bundled into it —
+  the import becomes a network request and the body stays on the server. The walk stops dead at that
+  boundary. Routing a client component's data access through a server action is the correct fix for
+  these findings, and Little Owl has to recognise it as such.
+- **`import type`.** Erased before anything is bundled, so it ships no code.
+- **Server components.** A file with no `"use client"` directive is expected to read secrets. Only
+  client components start a walk.
+- **Test files.**
+- **The same module reached twice.** One finding per (component, module) pair, carrying the shortest
+  chain — the one that is easiest to break.
+- **A module that is both risks at once.** If a module reads a secret _and_ imports `pg`, that is one
+  problem with one fix, reported once as the secret.
+
+Traversal is breadth-first with a depth limit of 10 and a visit ceiling per component, so a large
+graph stays fast and a cyclic one terminates.
+
+#### Limits
+
+This needs a `"use client"` directive to have something to start from, so it applies to Next.js App
+Router projects and anything else using the same convention. In a plain React or Vite app every file
+is client code and there is no boundary to check; Little Owl reports nothing rather than guessing.
+
+Reachability is static. A module behind a runtime-built dynamic import may be bundled without Little
+Owl seeing the edge, and a bundler may tree-shake away code that this walk still counts. Treat a
+finding as a place to look, and confirm by searching your built output for the value.
 
 ## Complexity
 

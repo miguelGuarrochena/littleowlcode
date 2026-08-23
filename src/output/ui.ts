@@ -50,20 +50,6 @@ export const box = (lines: string[], options: BoxOptions = {}): string => {
   return [top, ...body, bottom].join('\n');
 };
 
-/** The banner shown at the top of interactive sessions. */
-export const banner = (): string => {
-  return box(
-    [
-      '',
-      `${icons.owl}  ${colors.bold('Little Owl Code')}`,
-      '',
-      dim('A second pair of eyes for your codebase.'),
-      '',
-    ],
-    { width: 48 },
-  );
-};
-
 export const heading = (text: string): string => {
   return box([colors.bold(text)], { width: Math.max(46, visibleWidth(text) + 4) });
 };

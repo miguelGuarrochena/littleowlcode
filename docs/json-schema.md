@@ -10,7 +10,7 @@ Current version: **1**.
 ```jsonc
 {
   "schemaVersion": 1,
-  "tool": { "name": "little-owl-code", "version": "0.1.0" },
+  "tool": { "name": "little-owl-code", "version": "0.2.0" },
   "project": {
     "name": "my-app",
     "root": "/path/to/my-app",
@@ -48,6 +48,8 @@ Current version: **1**.
     "maxImportDepth": 7,
   },
   "counts": { "error": 0, "warning": 5, "info": 6 },
+  // The same totals in the words the reports use.
+  "priorities": { "critical": 0, "important": 5, "minor": 6, "total": 11 },
   // Files that could not be read or parsed. Never fatal.
   "warnings": [{ "file": "src/legacy/broken.py", "message": "could not be parsed (…)" }],
   // True when the scan stopped at its 20,000-file limit. Every number above
@@ -57,7 +59,10 @@ Current version: **1**.
     {
       "id": "architecture/layer-skip",
       "fingerprint": "8f2a1c4d9e07",
+      // The number `check` printed, and what `explain`/`fix`/`verify` accept.
+      "number": 3,
       "severity": "warning",
+      "priority": "important",
       "category": "architecture",
       "file": "components/Orders.tsx",
       "line": 4,
@@ -90,21 +95,32 @@ clean one.
 
 ### Finding fields
 
-| Field                 | Type                             | Notes                                                                                             |
-| --------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `id`                  | string                           | Rule id, e.g. `architecture/circular-dependency`                                                  |
-| `fingerprint`         | string                           | Stable identity — same problem, same fingerprint, across runs                                     |
-| `severity`            | `"error" \| "warning" \| "info"` | Resolved from your configuration                                                                  |
-| `category`            | string                           | `architecture`, `complexity`, `maintainability`, `dependencies`, `type-safety`, `scope`, `impact` |
-| `file`, `line`        | string, number                   | Optional; project-relative POSIX path                                                             |
-| `title`               | string                           | One line, usually including the number that matters                                               |
-| `message`             | string                           | Why it matters                                                                                    |
-| `detail`              | string[]                         | Optional supporting lines                                                                         |
-| `suggestion`          | string                           | Optional; what to do                                                                              |
-| `baseline`, `current` | unknown                          | Optional; the threshold and the measured value                                                    |
+| Field                 | Type                                   | Notes                                                                                             |
+| --------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `id`                  | string                                 | Rule id, e.g. `architecture/circular-dependency`                                                  |
+| `fingerprint`         | string                                 | Stable identity — same problem, same fingerprint, across runs                                     |
+| `number`              | number                                 | Issue number, from the priority ranking. `0` on a resolved finding                                |
+| `severity`            | `"error" \| "warning" \| "info"`       | Resolved from your configuration                                                                  |
+| `priority`            | `"critical" \| "important" \| "minor"` | The same value in the words the reports use                                                       |
+| `category`            | string                                 | `architecture`, `complexity`, `maintainability`, `dependencies`, `type-safety`, `scope`, `impact` |
+| `file`, `line`        | string, number                         | Optional; project-relative POSIX path                                                             |
+| `title`               | string                                 | One line, usually including the number that matters                                               |
+| `message`             | string                                 | Why it matters                                                                                    |
+| `detail`              | string[]                               | Optional supporting lines                                                                         |
+| `suggestion`          | string                                 | Optional; what to do                                                                              |
+| `baseline`, `current` | unknown                                | Optional; the threshold and the measured value                                                    |
 
 `fingerprint` is what makes drift comparison work. Use it as the identity of a finding, not `title`,
-which can be reworded.
+which can be reworded, and not `number`, which is a position in the current ranking.
+
+`number` is derived from the priority ranking of _all_ current findings, so it is the same value in
+`findings`, `newFindings` and every command that prints it. A finding in `resolvedFindings` has no
+place in that ranking any more and carries `0`.
+
+`severity` and `priority` are the same fact in two vocabularies. Rules are _configured_ with
+`error` / `warning` / `info`, because that is what every linter config already uses; reports _speak_
+in critical / important / minor, because that is what tells a reader how urgent something is. Neither
+one is going away.
 
 ### `baseline.configDrifted`
 
@@ -190,9 +206,17 @@ Everything above, plus:
 - `little-owl tests --json` — `hasNoTests`, `testFileCount`, `reachedCount`,
   `gaps` (each with `coverage`, `reachedBy` and `untestedExports`), `covered`
   and `skipped`.
+- `little-owl explain <n> --json` — the finding, plus `priority`, a `guidance`
+  object (`what`, `why`, `expected`, `fix`, `verify`, `risk`, `terms`) and
+  `related` files. `{ "number": n, "fixed": true }` when the issue is gone.
 - `little-owl explain <file> --json` — the archaeology report, including
   `evidence` (`strong` / `partial` / `none`), `created`, `rationale`,
   `consumers`, `coChanged` and `assessment`.
+- `little-owl fix <n> --json` — `number`, `title`, the `guidance` object and the
+  markdown `brief` for an AI assistant.
+- `little-owl verify [n] --json` — `verified` (the issue number, or `null` for
+  all), `resolved`, `remaining` and `introduced` as fingerprint arrays, plus
+  `metrics`, `previousMetrics` and `testsPassed` (`null` unless `--tests`).
 - `little-owl doctor --json` — `checks` (each `ok` / `warn` / `info`) and any
   files that had to be skipped.
 
@@ -206,12 +230,19 @@ Everything above, plus:
 `review` never fails a build on its own — it reports. Use `ci` when an exit code should decide
 whether something proceeds.
 
+`verify <n>` is the one reporting command with a meaningful exit code: it exits 1 while issue _n_ is
+still reproducing, so a script can wait on a fix. `verify` with no number is a status report and
+exits 0 unless `--tests` was passed and the tests failed.
+
 ## Piping
 
 ```bash
 little-owl check --json | jq '.findings[] | select(.severity == "error")'
 little-owl ci --json | jq -r '.ci.reasons[]'
 little-owl impact --json | jq -r '.tests[]'
+
+# The critical issues, by number, ready to feed back in
+little-owl check --json | jq -r '.findings[] | select(.priority=="critical") | .number'
 ```
 
 Progress spinners are written only to an interactive terminal, so JSON output is never polluted.

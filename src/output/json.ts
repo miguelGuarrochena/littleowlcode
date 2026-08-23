@@ -6,6 +6,8 @@ import type {
   Metrics,
   ReviewResult,
 } from '../core/types.js';
+import { countByPriority, PRIORITY_OF, type Priority, type PriorityCounts } from './severity.js';
+import { numberFindings } from './issue.js';
 
 /**
  * Stable JSON contract for `--json`.
@@ -19,7 +21,14 @@ export const SCHEMA_VERSION = 1;
 export interface JsonFinding {
   id: string;
   fingerprint: string;
+  /**
+   * Issue number, matching what `check` printed and what `fix`/`verify` accept.
+   * Derived from the priority ranking, so it is stable for a given code state.
+   */
+  number: number;
   severity: Finding['severity'];
+  /** The severity in the words the reports use: critical, important, minor. */
+  priority: Priority;
   category: Finding['category'];
   file?: string;
   line?: number;
@@ -44,6 +53,8 @@ export interface JsonCheckOutput {
   metrics: Metrics;
   stats: AnalysisResult['stats'];
   counts: { error: number; warning: number; info: number };
+  /** The same totals in the words the reports use. */
+  priorities: PriorityCounts;
   findings: JsonFinding[];
   /** Files that could not be read or parsed. Never fatal. */
   warnings: AnalysisWarning[];
@@ -75,11 +86,13 @@ export interface JsonReviewOutput extends JsonCheckOutput {
   resolvedFindings: JsonFinding[];
 }
 
-const toJsonFinding = (finding: Finding): JsonFinding => {
+const toJsonFinding = (finding: Finding, number: number): JsonFinding => {
   const json: JsonFinding = {
     id: finding.id,
     fingerprint: finding.fingerprint,
+    number,
     severity: finding.severity,
+    priority: PRIORITY_OF[finding.severity],
     category: finding.category,
     title: finding.title,
     message: finding.message,
@@ -93,6 +106,18 @@ const toJsonFinding = (finding: Finding): JsonFinding => {
   return json;
 };
 
+/**
+ * Fingerprint to issue number, from the full finding list.
+ *
+ * A resolved finding no longer has a number, because it no longer has a place
+ * in the ranking; 0 says that plainly rather than pointing at whichever issue
+ * happens to sit in its old position.
+ */
+const numbering = (all: Finding[]): ((finding: Finding) => number) => {
+  const map = new Map(numberFindings(all).map((issue) => [issue.fingerprint, issue.number]));
+  return (finding) => map.get(finding.fingerprint) ?? 0;
+};
+
 const counts = (findings: Finding[]): { error: number; warning: number; info: number } => {
   return {
     error: findings.filter((finding) => finding.severity === 'error').length,
@@ -102,6 +127,7 @@ const counts = (findings: Finding[]): { error: number; warning: number; info: nu
 };
 
 export const checkToJson = (result: AnalysisResult, version: string): JsonCheckOutput => {
+  const numbers = numbering(result.findings);
   return {
     schemaVersion: SCHEMA_VERSION,
     tool: { name: 'little-owl-code', version },
@@ -115,7 +141,8 @@ export const checkToJson = (result: AnalysisResult, version: string): JsonCheckO
     metrics: result.metrics,
     stats: result.stats,
     counts: counts(result.findings),
-    findings: result.findings.map(toJsonFinding),
+    priorities: countByPriority(result.findings),
+    findings: result.findings.map((finding) => toJsonFinding(finding, numbers(finding))),
     warnings: result.warnings,
     truncated: result.truncated,
     durationMs: result.durationMs,
@@ -124,6 +151,7 @@ export const checkToJson = (result: AnalysisResult, version: string): JsonCheckO
 
 export const reviewToJson = (review: ReviewResult, version: string): JsonReviewOutput => {
   const base = checkToJson(review.current, version);
+  const numbers = numbering(review.current.findings);
 
   return {
     ...base,
@@ -154,8 +182,10 @@ export const reviewToJson = (review: ReviewResult, version: string): JsonReviewO
     scope: review.scope
       ? { patterns: review.scope.patterns, outOfScope: review.scope.outOfScope }
       : null,
-    newFindings: review.newFindings.map(toJsonFinding),
-    resolvedFindings: review.resolvedFindings.map(toJsonFinding),
+    newFindings: review.newFindings.map((finding) => toJsonFinding(finding, numbers(finding))),
+    resolvedFindings: review.resolvedFindings.map((finding) =>
+      toJsonFinding(finding, numbers(finding)),
+    ),
   };
 };
 

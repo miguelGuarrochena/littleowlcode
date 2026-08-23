@@ -30,26 +30,67 @@ export interface Progress {
   stop(message?: string): void;
 }
 
+/** Frames for the spinner. Braille dots animate smoothly at any width. */
+const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const FRAME_MS = 80;
+
+/**
+ * A progress line that leaves nothing behind.
+ *
+ * This used to be `@clack/prompts`'s spinner, which draws its own frame — a
+ * leading `│` and a closing `◇` — and has no way to stop without one. Every
+ * command that finished quietly therefore printed two orphaned box characters
+ * above its output, which read as a rendering bug in the first three lines a
+ * new user ever sees.
+ *
+ * Writing to stderr rather than stdout is the other half: progress is not part
+ * of the report, and nothing that decorates a terminal should be able to reach
+ * a pipe carrying JSON.
+ */
 export const createProgress = (enabled: boolean): Progress => {
-  if (!enabled) {
+  // The animation is drawn on stderr, so stderr is what has to be a terminal.
+  // Gating on stdout instead would spool a few hundred spinner frames into the
+  // file behind `little-owl check 2> log.txt`.
+  if (!enabled || process.stderr.isTTY !== true) {
     return { start: () => {}, update: () => {}, stop: () => {} };
   }
 
-  const spinner = prompts.spinner();
-  let running = false;
+  let timer: NodeJS.Timeout | null = null;
+  let text = '';
+  let frame = 0;
+  let width = 0;
+
+  const draw = (): void => {
+    const line = `${FRAMES[frame % FRAMES.length]} ${text}`;
+    frame += 1;
+    width = Math.max(width, line.length);
+    process.stderr.write(`\r${line.padEnd(width)}`);
+  };
+
+  const erase = (): void => {
+    if (width > 0) process.stderr.write(`\r${' '.repeat(width)}\r`);
+    width = 0;
+  };
 
   return {
     start(message) {
-      spinner.start(message);
-      running = true;
+      if (timer) return;
+      text = message;
+      draw();
+      timer = setInterval(draw, FRAME_MS);
+      // Never hold the process open just to keep an animation running.
+      timer.unref?.();
     },
     update(message) {
-      if (running) spinner.message(message);
+      text = message;
     },
     stop(message) {
-      if (!running) return;
-      spinner.stop(message ?? '');
-      running = false;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      erase();
+      if (message) process.stderr.write(`${message}\n`);
     },
   };
 };

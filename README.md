@@ -30,7 +30,8 @@ npx little-owl-code
 
 Little Owl reads your project from disk, builds its dependency graph, and tells you what your last
 change did to the shape of the codebase — which boundaries it crossed, what got more complex, what
-is now duplicated.
+is now duplicated. Then it explains each problem in plain language, tells you exactly where it is,
+hands you (or your AI assistant) what is needed to fix it, and checks the fix afterwards.
 
 It is **deterministic** (same code, same findings, every machine), **read-only** (it never edits your
 source), and **local**. It never calls an AI model, needs no API key, and sends nothing anywhere.
@@ -57,58 +58,286 @@ Nothing was "wrong" at any single step. The codebase still drifted.
 **Little Owl Code is not the AI. It is the second pair of eyes watching what the AI does to your
 codebase.**
 
-## See it in action
+## Built for people building with AI
 
-After your assistant finishes, ask what it did:
+You do not need to be a security engineer, or an architect, or even a very experienced developer,
+to use this. Little Owl is written for the person who built a real application mostly by asking an
+assistant for features — and now wants to know whether it is safe to ship.
+
+So every issue it finds answers the same four questions, in plain language:
+
+**what happened · why it matters · where it is · what to do about it**
+
+And every screen ends on one recommended command, so there is never a point where the answer to
+"what now?" is _look it up_.
+
+## The whole thing is five commands
 
 ```bash
-little-owl review
+npx little-owl-code init        # set up. Asks nothing.
+npx little-owl-code check       # what needs attention, most important first
+npx little-owl-code explain 1   # what issue #1 actually means
+npx little-owl-code fix 1       # everything needed to fix it, incl. a brief for your AI
+npx little-owl-code verify 1    # confirm the fix really landed
 ```
 
+Everything else is optional.
+
+## See it in action
+
+### `little-owl check` — what needs attention
+
 ```
-╭──────────────────────────────────────────────╮
-│  🦉 CODEBASE REVIEW                          │
-╰──────────────────────────────────────────────╯
+🦉 Little Owl
 
-12 files changed (uncommitted changes vs HEAD)
-+486 -73 lines   across 3 areas
+✓ acme-app — Next.js · TypeScript
+✓ Next.js, React detected
+✓ 4 source files
+✓ Git repository — change reviews will work
 
-✗ DEGRADED
+✓ Read the project             4 files
+✓ Mapped how files connect     4 connections
+✓ Checked the architecture     3 layers: ui → application → infrastructure
+✓ Checked for common problems  5ms
 
-Architecture     91 →  84 ↓
-Maintainability  87 →  87   ·
-Complexity       84 →  71 ↓
-Dependencies     95 →  94 ↓
-Type Safety      91 →  87 ↓
-Overall          89 →  83 ↓
+────────────────────────────────────────────────────────────────────────
 
-Since the baseline: +1 circular dependency, +2 skipped-layer imports
+Health   95 / 100   ███████████████████░
 
-🔴 1 critical   🟡 3 warnings
+Your project needs attention.
 
-FINDINGS
+🔴   2  critical    Fix before your app goes live.
+🟠   1  important   Fix soon — this gets more expensive the longer it waits.
+🟡   4  minor       Improve when you have time. Nothing is broken.
 
-🔴 architecture  ui imports infrastructure directly
-   components/Orders.tsx:4
+Start with the 2 critical issues. The rest can wait.
 
-   components/Orders.tsx imports lib/db/client.ts, skipping the application
-   layer. The structure detected in this project is ui -> application ->
-   infrastructure.
+WHERE TO START
 
-   found:    ui -> infrastructure
-   expected: ui -> application -> infrastructure
+🔴 #1   Circular dependency across 2 files
+       lib/db/client.ts
+       Some of your files depend on each other in a loop:
+       lib/db/client.ts -> services/orders.ts -> lib/db/client.ts. Each
+       one needs the other to load first.
 
-   → Route the call through application instead of importing infrastructure
-   from here.
+🔴 #2   infrastructure imports application, which sits above it
+       lib/db/client.ts:1
+       lib/db/client.ts sits at a lower level of your app but imports
+       code from a level above it.
+
+… and 5 more. Run `little-owl check --all` to see every one.
+
+NEXT STEP
+
+  → little-owl explain 1   the full story of the first issue
 ```
 
-Reading that output:
+Three things are deliberate here:
 
-- **The arrows are the point.** `91 → 84` is the distance from your baseline, not an absolute grade.
-- **"Since the baseline"** names the counts behind the movement. Every score change traces back to
-  something you can go and look at.
+- **Every issue has a number.** `#3` is something you can talk about, and something you can type:
+  `explain 3`, `fix 3`, `verify 3` all mean the same problem.
+- **Levels are explained, not just coloured.** "critical" without "fix before your app goes live"
+  is a colour, not information.
+- **A long list is not a crisis.** Little Owl says so before you scroll.
+
+### The one it was built to catch
+
+Little Owl follows imports, which means it can see something no diff review and no
+file-at-a-time linter can:
+
+```
+components/Profile.tsx   "use client"
+      ↓ imports
+lib/user.ts
+      ↓ imports
+lib/db.ts                const url = process.env.DATABASE_URL
+```
+
+Three reasonable files. No single one of them is wrong. And because everything a client component
+imports gets compiled into the page, that database URL is now downloadable by anyone who visits your
+site.
+
+```
+🔴 #1   A secret can reach the browser through this component
+       components/ProfileCard.tsx
+       Following the imports out of components/ProfileCard.tsx leads to
+       code that reads a password or key from your environment — and
+       everything on that path is sent to the browser.
+```
+
+`little-owl explain 1` names the exact chain, explains what a visitor can actually do with it, and
+tells you to rotate the credential as well as change the code — because if the page has shipped, the
+value is already public.
+
+Just as importantly, it stays quiet about the things that only _look_ like this: Server Actions
+(that is the correct pattern, and the fix these findings recommend), `import type`, server
+components, and anything with a `NEXT_PUBLIC_` prefix. See
+[docs/rules.md](https://github.com/miguelGuarrochena/littleowlcode/blob/main/docs/rules.md#the-clientserver-boundary).
+
+### `little-owl explain 3` — what it actually means
+
+```
+🟠 IMPORTANT  issue #3
+
+ui imports infrastructure directly
+
+What happened
+  components/Orders.tsx reaches straight past the level directly below it
+  and talks to the one after that.
+
+Why this matters
+  A screen talking straight to the database skips whatever the middle
+  layer was doing — permission checks, validation, business rules. That
+  logic silently stops applying on this path, and it is easy to miss
+  because the feature still appears to work.
+
+Where
+  components/Orders.tsx:3
+
+Related files
+  app/dashboard/page.tsx  — uses this file
+  lib/db/client.ts  — this file uses it
+
+How it connects
+  app/dashboard/page.tsx
+     ↓
+  components/Orders.tsx
+     ↓
+  lib/db/client.ts
+
+What should happen instead
+  Each level should talk to the one directly below it, so the rules living
+  in between always run.
+
+Recommended fix
+  Route the call through the layer in between. If no function exists there
+  yet, add one that wraps the lower-level call along with whatever checks
+  belong with it.
+
+How to check it worked
+  Run `little-owl verify`, then exercise the feature and confirm the
+  checks in the middle layer actually run.
+
+In plain words
+  layer: A layer is a level of your app — screens on top, business logic
+  in the middle, database at the bottom. Code should call downwards, not
+  upwards.
+
+Next step
+  → little-owl fix 3
+```
+
+No rule ids, no "cyclomatic complexity", no acronyms left undefined. Add `--technical` when you do
+want the rule id and the raw evidence — it is one flag away, not the default.
+
+### `little-owl verify` — did it actually work?
+
+```
+🦉 Little Owl
+
+Checking whether the fix landed…
+
+✓ Re-read the project           4 files
+✓ Compared with the last check  7 issues then
+
+────────────────────────────────────────────────────────────────────────
+
+🟢 Issue #1 is fixed   Circular dependency across 2 files
+
+Health   95 → 99   ↑ +4
+
+Your project looks solid. A few things are worth fixing soon.
+
+NEXT STEP
+
+  → little-owl fix 2   next up: infrastructure imports application
+```
+
+`verify` re-derives the finding from your source, so an issue can only disappear by actually being
+gone. It also reports anything the fix introduced — a fix that trades one problem for another is
+not finished. Add `--tests` to run your project's own test command as part of the check.
+
+### `little-owl review` — what did my last change do?
+
+```
+🦉 Little Owl
+
+Looking at what changed…
+
+✓ 12 files changed   +486 -73, 3 areas
+  uncommitted changes vs HEAD
+✓ Compared with the baseline recorded 2 days ago
+
+Health   89 → 83   ↓ -6
+
+This change introduced something that needs fixing before release.
+
+🔴   1  critical    Fix before your app goes live.
+🟠   3  important   Fix soon — this gets more expensive the longer it waits.
+
+✓ 1 earlier issue no longer appears.
+
+WHAT THIS CHANGE INTRODUCED
+
+🔴 #1   Client component imports a server-only package
+       app/settings/page.tsx:2
+       app/settings/page.tsx runs in the browser but imports code that is
+       only supposed to run on your server.
+
+NEXT STEP
+
+  → little-owl explain 1   what this issue actually means
+```
+
+- **The arrow is the point.** `89 → 83` is the distance from your baseline, not an absolute grade.
 - **Only what this change introduced** is listed. Pre-existing debt stays quiet.
-- **Each finding says what, where, why it matters, and what to do.**
+
+## What it does not look at
+
+Fixtures, mocks, `examples/`, `testdata/`, `__snapshots__/` and `*.stories.*` are excluded by
+default, alongside the usual build output. That code is deliberately broken, deliberately tiny or
+purely illustrative, and findings about it are all true and all useless.
+
+`init` prints what it is analysing and what it skipped, with the pattern responsible, so you can
+disagree straight away:
+
+```
+SKIPPED
+
+  Sample code, not your application:
+
+  tests/fixtures  15 files  (**/fixtures/**)
+  examples         1 file  (examples/**)
+```
+
+If one of them really is your application, put the pattern back with a `!` in `ignore`:
+
+```ts
+ignore: ['!examples/**'],
+```
+
+## When Little Owl is wrong
+
+It will be, sometimes. `explain` and `fix` both end with the narrowest way to dismiss a finding —
+excluding a path when the code is not yours to fix, raising a threshold when you do not share the
+budget, or switching the rule off — and the brief handed to your AI assistant explicitly permits
+saying "this is a false positive" instead of changing correct code.
+
+The client/server boundary findings are the exception: no dismissal is offered for a leaked
+credential.
+
+## Priorities
+
+Little Owl never presents everything as equally urgent.
+
+|     | Level         | What it means                                            |
+| --- | ------------- | -------------------------------------------------------- |
+| 🔴  | **critical**  | Fix before your app goes live.                           |
+| 🟠  | **important** | Fix soon — this gets more expensive the longer it waits. |
+| 🟡  | **minor**     | Improve when you have time. Nothing is broken.           |
+
+A project with a hundred findings is usually a project with two real problems and ninety-eight
+notes. Little Owl says that out loud rather than handing you a wall.
 
 ## Why a linter is not enough
 
@@ -124,7 +353,12 @@ before this change?"_ That question needs three things a line-level linter does 
 | Memory            | none               | a baseline you control                |
 | Change awareness  | none               | git-aware: new vs pre-existing        |
 | Architecture      | mostly no          | layers, cycles, boundaries            |
+| Reachability      | no                 | can a browser component reach this?   |
 | Scope             | n/a                | did this change stay where it should? |
+
+The reachability row is the clearest example. A secret leaking into your client bundle through three
+files is invisible to any tool that reads one file at a time, because none of the three files is
+wrong. It is only visible to something holding the whole import graph.
 
 Run both. They are not competing.
 
@@ -197,14 +431,100 @@ little-owl prompt          a brief built from the real findings
         ↓
 your AI assistant fixes them
         ↓
+little-owl verify          did the fixes actually land?
+        ↓
 little-owl review          again — against the SAME baseline
 ```
 
-The last step is the one that makes the loop honest. Reviewing the fix against the same reference is
-what stops the second pass from quietly accepting the damage of the first.
+Reviewing the fix against the same reference is what stops the second pass from quietly accepting
+the damage of the first. `verify` is what stops "fix applied" from being taken on trust.
+
+### The brief Little Owl writes
+
+`little-owl prompt` does not hand your assistant a list of complaints. It hands it a worked
+problem:
+
+````markdown
+## Issue #1: Client component imports a server-only package
+
+- **Priority:** critical — Fix before your app goes live.
+- **Rule:** `next/server-import-in-client`
+- **File:** `app/settings/page.tsx:2`
+- **Function:** `SettingsPage()`
+
+### Current behaviour
+
+app/settings/page.tsx runs in the browser but imports code that is only
+supposed to run on your server.
+
+### Why it matters
+
+This is a real security risk. Server code often holds database credentials
+or API keys, and anything the browser bundle contains can be read by anyone
+who visits your site.
+
+### Expected behaviour
+
+Server code stays on the server. The browser receives only the results it
+is allowed to see.
+
+### Related files
+
+- `lib/db/client.ts` — this file uses it
+
+### Risks
+
+If a secret has already been deployed in a client bundle, treat it as
+leaked and rotate it. Removing the import does not un-publish what already
+shipped.
+
+### Constraints
+
+- Fix only what this issue names. Do not refactor surrounding code.
+- Do not change existing behaviour.
+- Do not add new dependencies.
+- Do not edit `.little-owl/baseline.json` or weaken rules to make the
+  finding disappear.
+
+### Acceptance criteria
+
+- [ ] Server code stays on the server.
+- [ ] `little-owl verify 1` reports the issue as fixed.
+- [ ] The existing tests still pass, unchanged.
+- [ ] No file outside the ones named above was modified.
+
+### How to verify
+
+```bash
+little-owl verify 1
+npm run test
+```
+````
+
+The point is that the assistant does not have to re-investigate anything. Little Owl already knows
+the file, the line, the enclosing function, the related files and how to check the result — and its
+version of those is measured, where the assistant's would be a guess.
+
+Use `--compact` for a short numbered list instead, when context budget is tight.
 
 Little Owl writes the prompt; **you** paste it into Claude Code, Cursor, Codex, Copilot or whatever
 you use. There is no integration with any of them, and none is needed — the output is text.
+
+### `LITTLE_OWL.md`
+
+`init` also writes a `LITTLE_OWL.md` at your project root. Claude Code, Cursor and similar tools
+pick up markdown in the repository root automatically, and this file tells them the things they
+cannot infer from the code:
+
+- the loop, and which command to run when
+- your declared layers, and that imports go downwards
+- the size limits this project agreed to
+- how to read a priority
+- what **not** to touch — in particular, that making a finding disappear by editing
+  `.little-owl/baseline.json` is not a fix
+
+Commit it. Edit it — it is yours. `little-owl agent` rewrites it, and refuses to clobber an edited
+copy unless you pass `--force`.
 
 ## Install
 
@@ -231,32 +551,53 @@ npx little-owl check
 ## Quick start
 
 ```bash
-# 1. Set up: detects your structure, writes config, records a baseline
+# 1. Set up. Detects your stack and structure, asks nothing.
 npx little-owl-code init
 
-# 2. Let your AI assistant do its thing
+# 2. See what needs attention
+npx little-owl-code check
 
-# 3. See what it did
-npx little-owl-code review
+# 3. Understand the first issue
+npx little-owl-code explain 1
+
+# 4. Get everything you need to fix it
+npx little-owl-code fix 1
+
+# 5. Confirm it actually landed
+npx little-owl-code verify 1
 ```
 
-If there are findings worth fixing:
+Then, once your assistant has been working:
 
 ```bash
-npx little-owl-code prompt
+npx little-owl-code review      # what did that change do?
+npx little-owl-code prompt      # the open issues, written up for your AI
 ```
 
 Running `little-owl` with no arguments opens interactive mode, which is the friendliest way in.
 
+**Little Owl never edits your source files.** `fix` prepares the change and tells you — or your
+assistant — exactly what to do; it does not do it behind your back.
+
 ## Commands
 
-**Get started**
+**The loop** — this is all most people need
 
-| Command            | What it does                     |
-| ------------------ | -------------------------------- |
-| `little-owl`       | Interactive mode                 |
-| `little-owl init`  | Set up config and a baseline     |
-| `little-owl check` | Health of the codebase right now |
+| Command                  | What it does                                               |
+| ------------------------ | ---------------------------------------------------------- |
+| `little-owl`             | Interactive mode                                           |
+| `little-owl init`        | Set up. Detects your stack and structure, asks nothing     |
+| `little-owl check`       | What needs attention, most important first                 |
+| `little-owl explain <n>` | What issue #n means, in plain language                     |
+| `little-owl fix <n>`     | Everything needed to fix it, including a brief for your AI |
+| `little-owl verify [n]`  | Did the fix actually land? (`--tests` runs your tests too) |
+
+**Working with an AI assistant**
+
+| Command             | What it does                                        |
+| ------------------- | --------------------------------------------------- |
+| `little-owl prompt` | The open issues, written up as a task for your AI   |
+| `little-owl agent`  | Write `LITTLE_OWL.md`, the briefing file for agents |
 
 **Reviewing changes**
 
@@ -266,7 +607,6 @@ Running `little-owl` with no arguments opens interactive mode, which is the frie
 | `little-owl watch`    | Report drift while you work              |
 | `little-owl baseline` | Record the reference state               |
 | `little-owl compare`  | Recent reviews against the same baseline |
-| `little-owl prompt`   | Write a brief for your AI assistant      |
 
 **Exploring a codebase** — see [docs/exploring.md](https://github.com/miguelGuarrochena/littleowlcode/blob/main/docs/exploring.md)
 
@@ -293,9 +633,28 @@ Running `little-owl` with no arguments opens interactive mode, which is the frie
 | `little-owl config` | Settings in effect (`--rules` to list every rule) |
 | `little-owl doctor` | Is Little Owl seeing this project properly?       |
 
-Useful flags: `--json` (every command), `--details` (`check`, `review`, `architecture`), `--quiet`,
-`--scope`, `--base <ref>`, `-C <dir>`, `--no-color`, `--no-cache` (analyse without writing anything
-to the project). Each command's own `--help` is authoritative.
+> `explain` takes either an issue number or a file path. `explain 3` is the issue; `explain
+src/auth.ts` is that file's history. Both were already the natural thing to type.
+
+Useful flags: `--json` (every command), `--all` (`check`), `--details` (`check`, `review`,
+`architecture`), `--technical` (`explain`), `--quiet`, `--scope`, `--base <ref>`, `-C <dir>`,
+`--no-color`, `--no-cache` (analyse without writing anything to the project). Each command's own
+`--help` is authoritative.
+
+### If something goes wrong
+
+Errors say what happened, why, and what to run next:
+
+```
+🦉 Little Owl has not looked at this project yet, so there are no numbered
+   issues to work from.
+
+Try:
+
+   little-owl check
+```
+
+`little-owl doctor` is the command to reach for when the output itself looks wrong.
 
 ### review
 
@@ -362,8 +721,14 @@ you type during a slow run is lost.
 This is the loop that stops the AI-review snowball.
 
 ```bash
-little-owl prompt
+little-owl prompt              # the full brief, with file, line and acceptance criteria
+little-owl prompt --compact    # a short numbered list, for a tight context budget
+little-owl prompt --all        # include debt that predates this change
+little-owl prompt -n 2         # fewer issues per brief
 ```
+
+The full brief is shown under [The AI development loop](#the-ai-development-loop). The compact form
+is the original one-liner list:
 
 ```
 Review the current changes using these constraints:
@@ -379,16 +744,34 @@ After making changes, run:
    little-owl review
 ```
 
-Paste that into Claude Code, Cursor, Codex, Copilot, or whatever you use. Then review again —
+Paste it into Claude Code, Cursor, Codex, Copilot, or whatever you use. Then review again —
 **against the same baseline**. That is what keeps the second pass honest:
 
 ```
-AI change → review → findings → AI fix → review → compare to the SAME baseline → accept or reject
+AI change → review → findings → AI fix → verify → review → compare to the SAME baseline
 ```
 
-The instructions are built only from findings that actually exist, capped so the list stays
-actionable. **Little Owl never calls a model, needs no API key, and sends nothing anywhere.** It
-writes the text; you decide what to do with it.
+The brief is built only from findings that actually exist, capped so the list stays actionable.
+**Little Owl never calls a model, needs no API key, and sends nothing anywhere.** It writes the
+text; you decide what to do with it.
+
+### fix and verify
+
+```bash
+little-owl fix 1              # the plan, the files involved, and the AI brief
+little-owl fix 1 --brief      # only the brief, ready to pipe: `... --brief | pbcopy`
+little-owl verify 1           # is issue #1 gone?
+little-owl verify             # everything you had open, plus anything new
+little-owl verify --tests     # and run this project's own test command
+```
+
+`fix` never edits your files. It answers "what changes, what is the goal, and what exactly do I say
+to my assistant" — and then gets out of the way.
+
+`verify` re-runs the analysis and matches findings by fingerprint, so an issue can only count as
+fixed by genuinely not reproducing. It also lists anything that appeared since, because a fix that
+trades one problem for another is not a fix. `verify <n>` exits non-zero while issue _n_ is still
+there; `verify` on its own is a status report and exits 0 unless your tests fail.
 
 ### ci
 
@@ -455,8 +838,12 @@ reach further than it can see.
 ## What it checks
 
 **Architecture** — circular dependencies, inverted layer dependencies, skipped layers, cross-feature
-imports, configured forbidden edges, very deep import chains, Next.js client components reaching
-server-only code.
+imports, configured forbidden edges, very deep import chains.
+
+**The client/server boundary** — secrets and server-only code that a browser component can reach
+_through a chain of imports_, not just by importing them directly. This is the one a linter
+structurally cannot find, because no individual file is wrong. Server Actions, `import type` and
+`NEXT_PUBLIC_` variables are correctly left alone.
 
 **Complexity** — oversized files, functions and React components, cyclomatic complexity, deep
 nesting, long parameter lists.
@@ -477,6 +864,9 @@ packages declared in both dependency lists.
 **Python** — bare `except:`, mutable default arguments, module-level `global` state, import cycles.
 
 **Go** — package cycles, discarded return values, oversized packages.
+
+Every one of these comes with a plain-language explanation of what it means for your running
+application, what should happen instead, and how to confirm the fix — not just a rule name.
 
 ## Supported languages
 
@@ -666,6 +1056,30 @@ for (const finding of result.findings) {
   console.log(finding.severity, finding.file, finding.title);
 }
 ```
+
+The plain-language layer is exported too, so an editor extension or a bot can say the same things
+the CLI says:
+
+```ts
+import { analyzeProject, numberFindings, resolveGuidance, renderIssueBrief } from 'little-owl-code';
+
+const { result, context } = await analyzeProject({ root: process.cwd() });
+
+for (const issue of numberFindings(result.findings)) {
+  const { what, why, expected, fix, verify } = resolveGuidance(issue);
+  console.log(`#${issue.number} ${issue.title}`, { what, why, expected, fix, verify });
+}
+
+// Or the whole thing as a task for an AI assistant:
+const [first] = numberFindings(result.findings);
+if (first) console.log(renderIssueBrief(first, { context, root: process.cwd() }));
+```
+
+## Changelog
+
+See [CHANGELOG.md](https://github.com/miguelGuarrochena/littleowlcode/blob/main/CHANGELOG.md).
+If you are upgrading from 0.1.x, read the note at the top of the 0.2.0 entry first — sample code is
+no longer analysed by default, which moves the file count and the score on most projects.
 
 ## Contributing
 

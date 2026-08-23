@@ -63,7 +63,7 @@ export const configDriftedFromBaseline = (
  */
 export const CONFIG_DRIFT_NOTICE = [
   'The configuration changed since this baseline was recorded.',
-  'Findings that already existed can show up as new, so treat the comparison as a guide.',
+  'Both halves of the comparison are affected: findings that already existed can show up as new, and the score moved partly because a different set of files is being measured — not only because of your change.',
   'Run `little-owl baseline` to re-record against the current configuration.',
 ];
 

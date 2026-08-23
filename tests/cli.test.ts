@@ -100,10 +100,14 @@ describe('cli', () => {
     expect(baseline.version).toBe('1');
     expect(baseline.metrics.overall).toBeGreaterThan(0);
 
-    // Running init again must not silently overwrite the existing setup.
-    const second = run(['init', '--yes'], project.root);
+    expect(fs.existsSync(project.path('LITTLE_OWL.md'))).toBe(true);
+
+    // Running init again must not silently overwrite the existing setup, and
+    // the refusal has to say what to do instead.
+    const second = run(['init'], project.root);
     expect(second.status).toBe(1);
-    expect(second.stdout).toContain('already exists');
+    expect(second.stderr).toContain('already set up');
+    expect(second.stderr).toContain('little-owl check');
   });
 
   it('exits 0 in CI when nothing is wrong', () => {
@@ -343,6 +347,7 @@ describe('cli', () => {
     const result = run([], project.root);
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('CODEBASE HEALTH');
+    expect(result.stdout).toContain('Little Owl');
+    expect(result.stdout).toContain('NEXT STEP');
   });
 });

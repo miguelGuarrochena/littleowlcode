@@ -2,6 +2,18 @@
 
 This is the workflow Little Owl Code was built for.
 
+The short version:
+
+```bash
+little-owl init        # once, per project — also writes LITTLE_OWL.md for your agent
+little-owl check       # what needs attention, most important first
+little-owl explain 1   # what issue #1 means, in plain language
+little-owl fix 1       # the plan, and a brief precise enough to hand to an assistant
+little-owl verify 1    # confirm it landed
+```
+
+Everything below is the same loop, in more detail.
+
 ## The snowball problem
 
 A normal AI-assisted session looks like this:
@@ -38,12 +50,12 @@ little-owl review                                 │
    │                                              │
    ├── healthy ──────────────► accept ────────────┘
    │
-   ├── needs review ─► little-owl prompt ─► AI fixes ─┐
-   │                                                   │
-   └── degraded ────► revert or fix by hand            │
-                                                       │
-                        compare against the SAME ◄─────┘
-                              baseline
+   ├── needs review ─► little-owl prompt ─► AI fixes ─► little-owl verify ─┐
+   │                                                                        │
+   └── degraded ────► revert or fix by hand                                 │
+                                                                            │
+                                        compare against the SAME ◄──────────┘
+                                              baseline
 ```
 
 The important part: **the baseline does not move between iterations.** Round two is judged against
@@ -120,29 +132,48 @@ Since the baseline: +1 circular dependency, +1 skipped-layer import
 Two things surfaced that the diff would not have: a new cycle, and three files changed in an area you
 never mentioned.
 
-**4. Hand the findings back.**
+**4. Understand the first one before you act on it.**
 
 ```bash
-little-owl prompt
+little-owl explain 1
 ```
 
+You get what happened, why it matters for the running app, the file and line, the related files,
+what should happen instead, and how to confirm the fix. Add `--technical` for the rule id and the
+raw evidence.
+
+**5. Hand the findings back.**
+
+```bash
+little-owl prompt              # every open issue, written up as a task
+little-owl fix 1 --brief       # or just the first one, ready to pipe
 ```
-Review the current changes using these constraints:
 
-1. Remove the circular dependency: features/orders/api.ts -> features/orders/store.ts -> features/orders/api.ts.
-2. Restore the layering in features/orders/BulkCancel.tsx: ui -> application -> data.
-3. Reduce the size of BulkCancelDialog, without changing behaviour.
-4. Do not modify files outside features/orders/**.
-5. Preserve the existing behaviour and keep the tests passing.
-
-After making changes, run:
-
-   little-owl review
-```
+The brief carries the file, the line, the enclosing function, the related files, the expected
+behaviour, the risks and the acceptance criteria — so the assistant does not spend its first four
+steps rediscovering what Little Owl already measured. Use `--compact` for the short numbered list
+when context is tight.
 
 Paste it in. No API key, no integration, no service in the middle.
 
-**5. Review again — against the same baseline.**
+**6. Check the fix actually landed.**
+
+```bash
+little-owl verify
+```
+
+```
+🟢 Issue #1 is fixed   Circular dependency across 2 files
+🟢 Issue #2 is fixed   ui imports infrastructure directly
+
+Health   86 → 91   ↑ +5
+```
+
+`verify` re-derives every finding from your source, so an issue can only disappear by genuinely
+being gone — and it lists anything new that appeared, because a fix that trades one problem for
+another is not finished. Add `--tests` to run the project's own test command as part of the check.
+
+**7. Review again — against the same baseline.**
 
 ```bash
 little-owl review --scope "features/orders/**"
@@ -160,11 +191,82 @@ Overall          89 →  89   ·
 🦉 Looking good. This change did not introduce new findings.
 ```
 
-**6. Only now, if you want, move the baseline.**
+**8. Only now, if you want, move the baseline.**
 
 ```bash
 little-owl baseline
 ```
+
+## The findings worth interrupting yourself for
+
+Most of what Little Owl reports can wait for a quiet afternoon. Two things cannot, and both come
+from the same check: a **secret** (`next/secret-in-client-bundle`) or **server-only code**
+(`next/server-module-in-client-bundle`) that a browser component can reach through a chain of
+imports.
+
+```bash
+little-owl check      # these always sort to #1
+```
+
+They are worth treating differently because they are the only findings where the damage is already
+done by the time you read them. If the page has been deployed, the value is public — the code fix
+closes the hole, but the credential still has to be rotated. `little-owl explain 1` says so, and so
+does the brief `little-owl fix 1` hands to your assistant.
+
+This is also the failure mode most specific to AI-assisted work. Ask for "reuse the existing helper"
+and you get an import; the assistant has no way to know that three files further down, that helper
+reaches the database client. Neither do you, from the diff.
+
+## What Little Owl decided not to look at
+
+`init` prints the scope before it prints anything else:
+
+```
+ANALYSING
+
+  src             87 files
+  tests           16 files
+
+SKIPPED
+
+  Sample code, not your application:
+
+  tests/fixtures  15 files  (**/fixtures/**)
+  examples         1 file  (examples/**)
+```
+
+Fixtures, mocks, `examples/`, `testdata/` and `*.stories.*` are excluded by default. They hold code
+that is deliberately broken, deliberately tiny, or illustrative, and reporting findings about it is
+how a tool convinces someone on day one that it does not understand their project.
+
+If one of those directories really is your application, put the pattern back with a `!`:
+
+```ts
+ignore: ['!examples/**'],
+```
+
+A `!` removes a built-in pattern; anything else adds one. `little-owl doctor` warns when sample code
+is being analysed anyway.
+
+## Telling the assistant the rules up front
+
+`little-owl init` writes `LITTLE_OWL.md` at the project root. Claude Code, Cursor and similar agents
+read markdown in the root automatically, so this is where the things they cannot infer from the code
+go:
+
+- the loop, and which command answers which question
+- your declared layers, and that imports go downwards
+- the size limits this project agreed to
+- how to read a priority
+- what **not** to touch — in particular that making a finding disappear by editing
+  `.little-owl/baseline.json` is not a fix
+
+Commit it, and edit it: it is a project document, not a generated artefact. `little-owl agent`
+rewrites it and refuses to clobber an edited copy without `--force`.
+
+The pattern this prevents is a familiar one. An assistant is told a check is failing, finds the
+file that records the check, and makes the check pass. Saying so once, in a file it will actually
+read, is cheaper than catching it every time.
 
 ## While you work
 

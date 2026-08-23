@@ -1,10 +1,10 @@
 import * as prompts from '@clack/prompts';
-import { detectProject, describeStack } from '../detect/project.js';
+import { detectProject } from '../detect/project.js';
 import { scanFiles } from '../core/scan.js';
 import { readBaseline } from '../baseline/baseline.js';
 import { isGitRepository } from '../git/git.js';
-import { banner } from '../output/ui.js';
-import { colors, dim, icons } from '../output/theme.js';
+import { dim, icons } from '../output/theme.js';
+import { owlHeader, renderDetection } from '../output/guided.js';
 import {
   cancelled,
   isInteractive,
@@ -21,6 +21,8 @@ import { initCommand } from './commands/init.js';
 import { baselineCommand } from './commands/baseline.js';
 import { configCommand } from './commands/config.js';
 import { deadCodeCommand, doctorCommand, mapCommand, testsCommand } from './commands/insight.js';
+import { promptCommand } from './commands/prompt.js';
+import { agentCommand } from './commands/agent.js';
 
 /**
  * The default experience: show what was detected, then offer the handful of
@@ -35,15 +37,14 @@ export const interactiveCommand = async (options: GlobalOptions): Promise<number
     return checkCommand(options);
   }
 
-  print('');
-  print(banner());
-  print('');
+  print(owlHeader());
 
   const config = await loadProjectConfig(root);
   const { files } = scanFiles(root, config);
   const project = detectProject(root, { files });
 
-  printDetection(root, project.fileCount, describeStack(project), project.frameworks);
+  print(renderDetection({ ...project, isGitRepo: isGitRepository(root) }));
+  print('');
 
   const configured = config.sourcePath !== null;
   const baseline = readBaseline(root);
@@ -52,26 +53,18 @@ export const interactiveCommand = async (options: GlobalOptions): Promise<number
     return firstRun(options);
   }
 
+  // Thirteen equally weighted options is a wall, not a menu. The four things
+  // people actually came to do are named in plain words at the top; everything
+  // else lives one keystroke deeper, where it stops competing for attention.
   for (;;) {
     const choice = await prompts.select({
       message: 'What would you like to do?',
       options: [
-        {
-          value: 'review',
-          label: '🔍 Review recent changes',
-          hint: 'what did the last change do?',
-        },
-        { value: 'check', label: '🧭 Check codebase', hint: 'health right now' },
-        { value: 'watch', label: '👀 Watch changes', hint: 'keep an eye on it while you work' },
-        { value: 'architecture', label: '🏗  Understand architecture' },
-        { value: 'impact', label: '📊 See change impact' },
-        { value: 'map', label: '🗺  Map the project', hint: 'new to this codebase?' },
-        { value: 'tests', label: '🧪 Find test gaps' },
-        { value: 'dead-code', label: '🧹 Find dead code' },
-        { value: 'dependencies', label: '📦 Inspect dependencies' },
-        { value: 'baseline', label: '📌 Update baseline' },
-        { value: 'config', label: '⚙  Configure' },
-        { value: 'doctor', label: '🩺 Doctor', hint: 'is Little Owl seeing this project right?' },
+        { value: 'check', label: 'See what needs attention', hint: 'start here' },
+        { value: 'review', label: 'See what my last change did' },
+        { value: 'prompt', label: 'Write a brief for my AI assistant' },
+        { value: 'watch', label: 'Watch the project while I work' },
+        { value: 'more', label: 'Something else…' },
         { value: 'exit', label: 'Exit' },
       ],
     });
@@ -82,8 +75,20 @@ export const interactiveCommand = async (options: GlobalOptions): Promise<number
       return 0;
     }
 
+    if (choice === 'more') {
+      const advanced = await moreMenu();
+      if (advanced === null) continue;
+      print('');
+      await runAdvanced(advanced, options);
+      print('');
+      continue;
+    }
+
     print('');
     switch (choice) {
+      case 'prompt':
+        await promptCommand(options);
+        break;
       case 'review':
         await reviewCommand({ ...options, noMenu: false });
         break;
@@ -92,33 +97,6 @@ export const interactiveCommand = async (options: GlobalOptions): Promise<number
         break;
       case 'watch':
         return watchCommand(options);
-      case 'architecture':
-        await architectureCommand(options);
-        break;
-      case 'impact':
-        await impactCommand(options);
-        break;
-      case 'map':
-        await mapCommand(options);
-        break;
-      case 'tests':
-        await testsCommand(options);
-        break;
-      case 'dead-code':
-        await deadCodeCommand(options);
-        break;
-      case 'dependencies':
-        await dependenciesCommand(options);
-        break;
-      case 'doctor':
-        await doctorCommand(options);
-        break;
-      case 'baseline':
-        await baselineCommand(options);
-        break;
-      case 'config':
-        await configCommand(options);
-        break;
       default:
         break;
     }
@@ -126,33 +104,61 @@ export const interactiveCommand = async (options: GlobalOptions): Promise<number
   }
 };
 
-const printDetection = (
-  root: string,
-  fileCount: number,
-  stack: string,
-  frameworks: string[],
-): void => {
-  const good = (text: string): string => `${colors.green(icons.ok)} ${text}`;
-
-  if (isGitRepository(root)) print(good('Git repository detected'));
-  for (const framework of frameworks.slice(0, 3)) print(good(`${framework} detected`));
-  print(good(`${stack}`));
-  print(good(`${fileCount} source files`));
-  print('');
+/** The commands people reach for once they know what they are looking for. */
+const moreMenu = async (): Promise<string | null> => {
+  const choice = await prompts.select({
+    message: 'Which one?',
+    options: [
+      { value: 'map', label: 'Map the project', hint: 'new to this codebase?' },
+      { value: 'architecture', label: 'Show the layers and boundary problems' },
+      { value: 'impact', label: 'What could changing this file affect?' },
+      { value: 'tests', label: 'Find behaviour no test watches' },
+      { value: 'dead-code', label: 'Find files nothing reaches' },
+      { value: 'dependencies', label: 'Compare declared and imported packages' },
+      { value: 'baseline', label: 'Record this state as the new reference' },
+      { value: 'agent', label: 'Write LITTLE_OWL.md for AI assistants' },
+      { value: 'config', label: 'Show the settings in effect' },
+      { value: 'doctor', label: 'Is Little Owl seeing this project properly?' },
+      { value: 'back', label: 'Back' },
+    ],
+  });
+  if (prompts.isCancel(choice) || choice === 'back') return null;
+  return String(choice);
 };
 
-/** Shown when there is no config and no baseline yet. */
+const runAdvanced = async (choice: string, options: GlobalOptions): Promise<void> => {
+  const commands: Record<string, () => Promise<number>> = {
+    map: () => mapCommand(options),
+    architecture: () => architectureCommand(options),
+    impact: () => impactCommand(options),
+    tests: () => testsCommand(options),
+    'dead-code': () => deadCodeCommand(options),
+    dependencies: () => dependenciesCommand(options),
+    baseline: () => baselineCommand(options),
+    agent: () => agentCommand(options),
+    config: () => configCommand(options),
+    doctor: () => doctorCommand(options),
+  };
+  await commands[choice]?.();
+};
+
+/**
+ * Shown when there is no config and no baseline yet.
+ *
+ * One question with an obvious answer, phrased in terms of what happens rather
+ * than what gets written. "Create a baseline" is a thing Little Owl does;
+ * "start watching this project" is the thing the person wants.
+ */
 const firstRun = async (options: GlobalOptions): Promise<number> => {
-  print(dim('Looks like this is your first time here.'));
+  print(dim('This is the first time Little Owl has seen this project.'));
   print('');
 
   const choice = await prompts.select({
-    message: 'Want me to analyse the project and create a baseline?',
+    message: 'Set Little Owl up here? It asks nothing and takes a few seconds.',
     options: [
-      { value: 'baseline', label: 'Analyse and create a baseline', hint: 'recommended' },
-      { value: 'analyze', label: 'Just analyse' },
-      { value: 'configure', label: 'Configure manually' },
-      { value: 'exit', label: 'Exit' },
+      { value: 'init', label: 'Yes — set it up and show me what it finds', hint: 'recommended' },
+      { value: 'analyze', label: 'Just look, do not write anything' },
+      { value: 'exit', label: 'Not now' },
     ],
   });
 
@@ -160,6 +166,5 @@ const firstRun = async (options: GlobalOptions): Promise<number> => {
 
   print('');
   if (choice === 'analyze') return checkCommand(options);
-  if (choice === 'configure') return initCommand({ ...options, baseline: false });
   return initCommand(options);
 };

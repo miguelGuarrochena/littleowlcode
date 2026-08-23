@@ -1,26 +1,8 @@
-import type {
-  AnalysisResult,
-  ChangeSet,
-  Finding,
-  Metrics,
-  ProjectInfo,
-  ReviewResult,
-} from '../core/types.js';
-import {
-  colors,
-  dim,
-  icons,
-  severityColor,
-  severityIcon,
-  statusColor,
-  statusIcon,
-  statusText,
-} from './theme.js';
+import type { AnalysisResult, Finding, Metrics, ProjectInfo } from '../core/types.js';
+import { colors, dim, icons, severityColor, severityIcon } from './theme.js';
 import { box, countLabel, heading, indent, metricLine, rule, scoreBar, wrap } from './ui.js';
 import { MAX_SCANNED_FILES } from '../core/scan.js';
 import { describeStack } from '../detect/project.js';
-import { CONFIG_DRIFT_NOTICE, explainDrift } from '../baseline/baseline.js';
-import { groupByArea } from '../review/scope.js';
 
 const METRIC_LABELS: Array<[keyof Omit<Metrics, 'overall'>, string]> = [
   ['architecture', 'Architecture'],
@@ -136,134 +118,6 @@ export const renderMetricComparison = (current: Metrics, baseline: Metrics | nul
   return [...METRIC_LABELS.map(([key, label]) => line(label, key)), line('Overall', 'overall')];
 };
 
-export const renderReview = (review: ReviewResult, options: RenderOptions = {}): string => {
-  const { current, baseline, changes, scope } = review;
-  const shown = review.baseline ? review.newFindings : current.findings;
-  const sections: string[] = [heading(`${icons.owl} CODEBASE REVIEW`), ''];
-
-  if (changes) {
-    const size = changeSize(changes);
-    sections.push(
-      `${colors.bold(countLabel(size.files, 'file'))} changed ${dim(`(${changes.description})`)}`,
-    );
-    if (size.insertions > 0 || size.deletions > 0) {
-      sections.push(
-        `${colors.green(`+${size.insertions.toLocaleString()}`)} ${colors.red(`-${size.deletions.toLocaleString()}`)} ${dim('lines')}` +
-          (size.areas > 1 ? dim(`   across ${countLabel(size.areas, 'area')}`) : ''),
-      );
-    }
-    sections.push('');
-  }
-
-  sections.push(
-    `${statusColor(review.status)(`${statusIcon(review.status)} ${statusText[review.status]}`)}`,
-    '',
-  );
-
-  sections.push(...renderMetricComparison(current.metrics, baseline?.metrics ?? null));
-
-  if (baseline) {
-    const reasons = explainDrift(baseline, current);
-    if (reasons.length > 0) {
-      sections.push('', dim(`Since the baseline: ${reasons.join(', ')}`));
-    }
-    if (review.configDrifted) sections.push('', renderConfigDrift());
-  } else {
-    sections.push(
-      '',
-      dim('No baseline recorded, so this is the state of the code rather than the effect of'),
-      dim('a change. Run `little-owl baseline` to make the next review a comparison.'),
-    );
-  }
-
-  sections.push('', renderCounts(countBySeverity(shown), current.findings.length));
-
-  if (review.resolvedFindings.length > 0) {
-    sections.push(
-      colors.green(
-        `${icons.ok} ${countLabel(review.resolvedFindings.length, 'earlier finding')} resolved`,
-      ),
-    );
-  }
-
-  if (scope && scope.outOfScope.length > 0) {
-    sections.push('', renderScope(scope.patterns, scope.outOfScope));
-  }
-
-  if (current.truncated) sections.push('', renderTruncationNotice());
-
-  const findings = renderFindings(shown, options);
-  if (findings) sections.push('', findings);
-  else
-    sections.push(
-      '',
-      colors.green(`${icons.owl} Looking good. This change did not introduce new findings.`),
-    );
-
-  return sections.join('\n');
-};
-
-/**
- * Shown whenever a comparison runs against a baseline recorded under different
- * settings. Without it, findings that were always there read as damage the
- * current change did — which is the one thing a review must never get wrong.
- */
-export const renderConfigDrift = (): string => {
-  const [first, ...rest] = CONFIG_DRIFT_NOTICE;
-  return [
-    colors.yellow(`${icons.warn} ${first}`),
-    ...rest.flatMap((line) => wrap(line, 76).map((wrapped) => dim(`   ${wrapped}`))),
-  ].join('\n');
-};
-
-export interface ChangeSize {
-  files: number;
-  insertions: number;
-  deletions: number;
-  /** Distinct top-level directories touched. */
-  areas: number;
-  magnitude: 'small' | 'medium' | 'large';
-}
-
-/**
- * How big the change is, separate from whether it is good. A large change is
- * not wrong, but it is worth knowing before reading four findings and assuming
- * you have seen everything.
- */
-export const changeSize = (changes: ChangeSet): ChangeSize => {
-  const insertions = changes.files.reduce((sum, file) => sum + file.insertions, 0);
-  const deletions = changes.files.reduce((sum, file) => sum + file.deletions, 0);
-  const areas = new Set(
-    changes.files.map((file) =>
-      file.path.includes('/') ? file.path.slice(0, file.path.indexOf('/')) : '.',
-    ),
-  ).size;
-
-  const touched = insertions + deletions;
-  const magnitude =
-    changes.files.length > 30 || touched > 1500
-      ? 'large'
-      : changes.files.length > 10 || touched > 400
-        ? 'medium'
-        : 'small';
-
-  return { files: changes.files.length, insertions, deletions, areas, magnitude };
-};
-
-const renderScope = (patterns: string[], outOfScope: string[]): string => {
-  const groups = groupByArea(outOfScope);
-  const lines = [
-    colors.yellow(`${icons.warn} SCOPE`),
-    '',
-    `  ${dim('expected:')} ${patterns.join(', ')}`,
-    `  ${dim('also changed:')}`,
-    ...groups.map(
-      (group) => `    ${group.area}/ ${dim(`(${countLabel(group.files.length, 'file')})`)}`,
-    ),
-  ];
-  return lines.join('\n');
-};
-
 export const renderFindings = (findings: Finding[], options: RenderOptions = {}): string => {
   if (findings.length === 0) return '';
   if (options.quiet) return '';
@@ -332,10 +186,14 @@ const renderCounts = (
       colors.red(`${severityIcon.error} ${countLabel(counts.error, 'critical', 'critical')}`),
     );
   if (counts.warning > 0) {
-    parts.push(colors.yellow(`${severityIcon.warning} ${countLabel(counts.warning, 'warning')}`));
+    parts.push(
+      colors.yellow(
+        `${severityIcon.warning} ${countLabel(counts.warning, 'important', 'important')}`,
+      ),
+    );
   }
   if (counts.info > 0)
-    parts.push(colors.blue(`${severityIcon.info} ${countLabel(counts.info, 'note')}`));
+    parts.push(colors.blue(`${severityIcon.info} ${countLabel(counts.info, 'minor', 'minor')}`));
   if (parts.length === 0) {
     parts.push(colors.green(`${icons.ok} nothing flagged`));
   }

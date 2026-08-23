@@ -73,6 +73,12 @@ export default defineConfig({
     'type-safety/suppression': 'warning',
     'maintainability/duplicate-block': 'info',
 
+    // The client/server boundary. Both are `error` by default and there is
+    // rarely a good reason to lower them: a secret in a browser bundle is
+    // readable by anyone who visits the page.
+    'next/secret-in-client-bundle': 'error',
+    'next/server-module-in-client-bundle': 'error',
+
     // Turn off anything that does not fit how this project works.
     'dependencies/unused-dependency': 'off',
   },

@@ -5,7 +5,9 @@ import { printJson } from '../../output/json.js';
 import { renderArchitecture, renderDependencies, renderImpact } from '../../output/inspect.js';
 import { dim } from '../../output/theme.js';
 import { layerCoverage, layerOf } from '../../architecture/layers.js';
+import { renderNextStep, type NextStep } from '../../output/guided.js';
 import { loadProjectConfig, print, resolveRoot, type GlobalOptions } from '../runtime.js';
+import type { AnalysisContext } from '../../core/context.js';
 
 export interface InspectOptions extends GlobalOptions {
   json?: boolean;
@@ -62,7 +64,29 @@ export const architectureCommand = async (options: InspectOptions): Promise<numb
     );
     print('');
   }
+  print(renderNextStep(architectureNextStep(context)));
+  print('');
   return 0;
+};
+
+/**
+ * Where to go from a layer diagram.
+ *
+ * The answer depends on what the diagram showed: guessed layers are a setup
+ * problem, violations are a code problem, and a clean one means this command
+ * has nothing more to offer.
+ */
+const architectureNextStep = (context: AnalysisContext): NextStep => {
+  if (context.layers.order.length === 0 || context.layers.inferred) {
+    return {
+      command: 'little-owl init',
+      note: 'these layers are a guess — write them down and they become rules',
+    };
+  }
+  if (context.cycles.length > 0) {
+    return { command: 'little-owl check', note: 'the boundary problems, in priority order' };
+  }
+  return { command: 'little-owl check', note: 'what else needs attention' };
 };
 
 export interface ImpactOptions extends InspectOptions {
@@ -104,6 +128,17 @@ export const impactCommand = async (options: ImpactOptions): Promise<number> => 
   }
   print(renderImpact(report));
   print('');
+  print(
+    renderNextStep(
+      report.tests.length > 0
+        ? {
+            command: 'little-owl tests',
+            note: `${report.tests.length} tests reach this — check what they miss`,
+          }
+        : { command: 'little-owl tests', note: 'nothing here is covered by a test' },
+    ),
+  );
+  print('');
   return 0;
 };
 
@@ -135,6 +170,8 @@ export const dependenciesCommand = async (options: InspectOptions): Promise<numb
 
   print('');
   print(renderDependencies(context));
+  print('');
+  print(renderNextStep({ command: 'little-owl check', note: 'what else needs attention' }));
   print('');
   return 0;
 };

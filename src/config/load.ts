@@ -106,6 +106,27 @@ const describeConfigFailure = (file: string, error: unknown): string => {
   return `Could not load ${file}: ${reason}`;
 };
 
+/**
+ * The project's ignore list on top of the built-in one.
+ *
+ * Additive, with one escape: a pattern written as `!something` *removes* a
+ * built-in entry instead of adding one. Without it the defaults would be
+ * unremovable, and Little Owl would be telling people to exclude their
+ * `examples/` directory with no way to say "no, that one is real code".
+ *
+ * `!` matches how every other ignore file in a developer's life behaves, so it
+ * needs no explanation the first time someone sees it.
+ */
+export const mergeIgnore = (defaults: readonly string[], project: readonly string[]): string[] => {
+  const removed = new Set(
+    project.filter((pattern) => pattern.startsWith('!')).map((pattern) => pattern.slice(1)),
+  );
+  return [
+    ...defaults.filter((pattern) => !removed.has(pattern)),
+    ...project.filter((pattern) => !pattern.startsWith('!')),
+  ];
+};
+
 /** Merges a user config on top of the strictness preset it selected. */
 export const resolveConfig = (raw: LittleOwlConfig): ResolvedConfig => {
   const strictness: Strictness = raw.strictness ?? 'balanced';
@@ -114,7 +135,7 @@ export const resolveConfig = (raw: LittleOwlConfig): ResolvedConfig => {
   return {
     strictness,
     include: raw.include ?? base.include,
-    ignore: [...base.ignore, ...(raw.ignore ?? [])],
+    ignore: mergeIgnore(base.ignore, raw.ignore ?? []),
     architecture: {
       layers: raw.architecture?.layers ?? base.architecture.layers,
       layerPolicy: raw.architecture?.layerPolicy ?? base.architecture.layerPolicy,
@@ -138,7 +159,7 @@ export const ensureConfigDir = (root: string): string => {
 };
 
 /** Entries inside `.little-owl/` that are local state, not project source. */
-const LOCAL_ONLY = ['cache/', 'history.json'];
+const LOCAL_ONLY = ['cache/', 'history.json', 'last-run.json'];
 
 /**
  * Keeps Little Owl's local state out of version control.

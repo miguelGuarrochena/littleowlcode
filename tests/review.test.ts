@@ -13,10 +13,11 @@ import { resolveConfig } from '../src/config/load.js';
 import { checkScope, groupByArea } from '../src/review/scope.js';
 import { analyzeImpact } from '../src/review/impact.js';
 import { generatePrompt } from '../src/prompts/generate.js';
+import { renderReview } from '../src/output/review-report.js';
 import { evaluateCi } from '../src/cli/commands/ci.js';
 import { reviewToJson, SCHEMA_VERSION } from '../src/output/json.js';
 import { detectChanges } from '../src/git/git.js';
-import type { Finding, ReviewResult } from '../src/core/types.js';
+import type { Finding, Metrics, ReviewResult } from '../src/core/types.js';
 
 let project: TempProject | null = null;
 
@@ -270,6 +271,80 @@ describe('change impact', () => {
   });
 });
 
+describe('a review after the configuration moved', () => {
+  const metrics = (overall: number): Metrics => ({
+    overall,
+    architecture: overall,
+    maintainability: overall,
+    complexity: overall,
+    dependencies: overall,
+    typeSafety: overall,
+  });
+
+  const drifted = (configDrifted: boolean, before: number, after: number): ReviewResult =>
+    ({
+      status: 'healthy',
+      current: {
+        metrics: metrics(after),
+        stats: {},
+        findings: [],
+        fileMetrics: {},
+        project: { name: 'p', fileCount: 10, frameworks: [], languages: ['typescript'] },
+        warnings: [],
+        truncated: false,
+        durationMs: 1,
+      },
+      baseline: { version: '1', createdAt: new Date().toISOString(), metrics: metrics(before) },
+      changes: null,
+      newFindings: [],
+      resolvedFindings: [],
+      scope: null,
+      drift: null,
+      configDrifted,
+    }) as unknown as ReviewResult;
+
+  it('does not credit the change for a score move the configuration caused', () => {
+    // Excluding a directory raises the score on its own. Saying "this change
+    // left the project in better shape" then hands the reader's edit credit
+    // for what an `ignore` pattern did.
+    const rendered = renderReview(drifted(true, 92, 98), { issues: [] });
+
+    expect(rendered).toContain('92');
+    expect(rendered).toContain('98');
+    expect(rendered).toContain('not all your change');
+    expect(rendered).not.toContain('left the project in better shape');
+  });
+
+  it('does not blame the change for a drop the configuration caused either', () => {
+    const rendered = renderReview(drifted(true, 98, 80), { issues: [] });
+
+    expect(rendered).not.toContain('moved the project in the wrong direction');
+    expect(rendered).toContain('not comparable');
+  });
+
+  it('still attributes the movement when the configuration held still', () => {
+    const better = renderReview(drifted(false, 92, 98), { issues: [] });
+    expect(better).toContain('left the project in better shape');
+    expect(better).not.toContain('not all your change');
+
+    const worse = renderReview(drifted(false, 98, 80), { issues: [] });
+    expect(worse).toContain('wrong direction');
+  });
+
+  it('keeps quiet about attribution when the score did not move at all', () => {
+    const rendered = renderReview(drifted(true, 90, 90), { issues: [] });
+    expect(rendered).not.toContain('not all your change');
+  });
+
+  it('warns that both halves of the comparison are affected', () => {
+    const rendered = renderReview(drifted(true, 92, 98), { issues: [] });
+
+    expect(rendered).toContain('configuration changed');
+    expect(rendered).toContain('score moved partly');
+    expect(rendered).toContain('little-owl baseline');
+  });
+});
+
 describe('prompt generation', () => {
   const reviewWith = (findings: Finding[], scope?: string[]): ReviewResult => {
     return {
@@ -301,28 +376,109 @@ describe('prompt generation', () => {
     };
   };
 
-  it('turns findings into numbered instructions and keeps the scope constraint', () => {
-    const prompt = generatePrompt(
-      reviewWith(
-        [
-          {
-            id: 'architecture/circular-dependency',
-            fingerprint: 'a',
-            severity: 'error',
-            category: 'architecture',
-            title: 'Circular dependency across 3 files',
-            message: 'm',
-            detail: ['a.ts -> b.ts -> c.ts -> a.ts'],
-          },
-        ],
-        ['features/orders/**'],
-      ),
-    );
+  const cycleFinding: Finding = {
+    id: 'architecture/circular-dependency',
+    fingerprint: 'a',
+    severity: 'error',
+    category: 'architecture',
+    title: 'Circular dependency across 3 files',
+    message: 'm',
+    detail: ['a.ts -> b.ts -> c.ts -> a.ts'],
+  };
+
+  it('writes a full brief with everything an assistant needs', () => {
+    const prompt = generatePrompt(reviewWith([cycleFinding], ['features/orders/**']));
+
+    // The four questions an assistant would otherwise have to answer itself.
+    expect(prompt).toContain('### Current behaviour');
+    expect(prompt).toContain('### Why it matters');
+    expect(prompt).toContain('### Expected behaviour');
+    expect(prompt).toContain('### Acceptance criteria');
+
+    expect(prompt).toContain('Circular dependency across 3 files');
+    expect(prompt).toContain('a.ts -> b.ts -> c.ts -> a.ts');
+    expect(prompt).toContain('`architecture/circular-dependency`');
+    expect(prompt).toContain('Do not modify files outside features/orders/**.');
+    expect(prompt).toContain('little-owl verify 1');
+  });
+
+  it('tells the assistant not to silence a real finding, but allows dismissing a wrong one', () => {
+    const prompt = generatePrompt(reviewWith([cycleFinding]));
+
+    expect(prompt).toContain('.little-owl/baseline.json');
+    expect(prompt).toContain('silently');
+    // The old wording forbade touching the config at all, which left an
+    // assistant holding a false positive with no legal move except to "fix"
+    // code that was already correct.
+    expect(prompt).toContain('If this finding is wrong');
+    expect(prompt).toContain('false positive');
+    expect(prompt).toContain('Do not do both');
+  });
+
+  it('still writes the compact instruction list on request', () => {
+    const prompt = generatePrompt(reviewWith([cycleFinding], ['features/orders/**']), {
+      style: 'compact',
+    });
 
     expect(prompt).toContain('1. Remove the circular dependency: a.ts -> b.ts -> c.ts -> a.ts.');
     expect(prompt).toContain('Do not modify files outside features/orders/**.');
     expect(prompt).toContain('Preserve the existing behaviour');
     expect(prompt).toContain('little-owl review');
+  });
+
+  it('does not claim there is nothing to fix while check lists open findings', () => {
+    // The trap: `check` says "4 important", `prompt` says "nothing to fix".
+    // They were looking at different sets and neither said so.
+    const preexisting: Finding = {
+      id: 'complexity/large-file',
+      fingerprint: 'old',
+      severity: 'warning',
+      category: 'complexity',
+      file: 'src/big.ts',
+      title: 'src/big.ts is 900 lines',
+      message: 'm',
+    };
+    const review = reviewWith([]);
+    review.current.findings = [preexisting];
+    review.newFindings = [
+      {
+        id: 'complexity/deep-nesting',
+        fingerprint: 'new',
+        severity: 'info',
+        category: 'complexity',
+        title: 'deep',
+        message: 'm',
+      },
+    ];
+
+    const prompt = generatePrompt(review);
+    expect(prompt).toContain('most recent change introduced nothing');
+    expect(prompt).toContain('predate this change');
+    expect(prompt).toContain('little-owl prompt --all');
+  });
+
+  it('does not tell the assistant that pre-existing debt came from the change', () => {
+    // `--all` widens the pool to the whole codebase. Saying "introduced by the
+    // most recent change" sends the assistant hunting through a diff that does
+    // not contain any of it.
+    const old: Finding = {
+      id: 'complexity/large-file',
+      fingerprint: 'old',
+      severity: 'warning',
+      category: 'complexity',
+      file: 'src/big.ts',
+      title: 'src/big.ts is 900 lines',
+      message: 'm',
+    };
+    const review = reviewWith([cycleFinding]);
+    review.current.findings = [old, cycleFinding];
+
+    expect(generatePrompt(review, { includeExisting: true })).toContain('present in this codebase');
+    expect(generatePrompt(review, { includeExisting: true })).not.toContain(
+      'introduced by the most recent change',
+    );
+    // And the narrow form still says it is about the change.
+    expect(generatePrompt(review)).toContain('introduced by the most recent change');
   });
 
   it('stays short by ignoring info-level findings', () => {
@@ -357,11 +513,15 @@ describe('prompt generation', () => {
       detail: ['found:    ui -> infrastructure', 'expected: ui -> application -> infrastructure'],
     });
 
-    const text = generatePrompt(reviewWith([sameFile(17), sameFile(18), sameFile(22)]));
-    const numbered = text.split('\n').filter((line) => /^\d+\. /.test(line));
-    const layering = numbered.filter((line) => line.includes('Restore the layering'));
+    const findings = [sameFile(17), sameFile(18), sameFile(22)];
 
-    expect(layering).toHaveLength(1);
+    const compact = generatePrompt(reviewWith(findings), { style: 'compact' });
+    const numbered = compact.split('\n').filter((line) => /^\d+\. /.test(line));
+    expect(numbered.filter((line) => line.includes('Restore the layering'))).toHaveLength(1);
+
+    // The full brief deduplicates the same way: one heading, not three.
+    const full = generatePrompt(reviewWith(findings));
+    expect(full.split('\n').filter((line) => line.startsWith('## Issue #'))).toHaveLength(1);
   });
 
   it('caps the number of instructions', () => {
@@ -375,12 +535,17 @@ describe('prompt generation', () => {
       file: `file${index}.ts`,
     }));
 
-    const numbered = generatePrompt(reviewWith(many), { maxInstructions: 3 })
+    const numbered = generatePrompt(reviewWith(many), { maxInstructions: 3, style: 'compact' })
       .split('\n')
       .filter((line) => /^\d+\./.test(line));
 
     // 3 findings plus the standing "preserve behaviour" instruction.
     expect(numbered).toHaveLength(4);
+
+    // The full brief obeys the same cap, and says what it left out.
+    const full = generatePrompt(reviewWith(many), { maxInstructions: 3 });
+    expect(full.split('\n').filter((line) => line.startsWith('## Issue #'))).toHaveLength(3);
+    expect(full).toContain('17 more findings');
   });
 });
 

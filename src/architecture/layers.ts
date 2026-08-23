@@ -52,6 +52,20 @@ const CONVENTIONAL_LAYERS: Array<[string, string[]]> = [
 
 const FEATURE_ROOT_CANDIDATES = ['features', 'modules', 'domains', 'packages'];
 
+/**
+ * How many layers it takes to have an architecture worth checking.
+ *
+ * Every boundary rule compares two ends of an import. With one layer there is
+ * no second end, so nothing can ever be reported — and a model that cannot
+ * report anything is not a model, it is a label. Saying so in one place stops
+ * `check`, `doctor` and `init` from each deciding it differently, which is
+ * exactly what they used to do.
+ */
+export const LAYERS_NEEDED = 2;
+
+export const hasUsableLayers = (model: Pick<LayerModel, 'order'>): boolean =>
+  model.order.length >= LAYERS_NEEDED;
+
 export const inferLayers = (files: ParsedFile[]): LayerModel => {
   const present = new Map<string, Set<string>>();
 
@@ -81,6 +95,14 @@ export const inferLayers = (files: ParsedFile[]): LayerModel => {
     FEATURE_ROOT_CANDIDATES.find((candidate) =>
       files.some((file) => meaningfulSegments(file.path)[0] === candidate),
     ) ?? null;
+
+  // One conventional directory name is not evidence of a layered architecture.
+  // Guessing `domain: ["core"]` from a folder called `core` and writing it into
+  // someone's config states a decision they never made, and enables rules that
+  // can never fire.
+  if (order.length < LAYERS_NEEDED) {
+    return { order: [], dirsByLayer: {}, policy: 'adjacent', inferred: true, featureRoot };
+  }
 
   return { order, dirsByLayer, policy: 'adjacent', inferred: true, featureRoot };
 };

@@ -59,6 +59,10 @@ the map never guesses at what a package does.
 
 ## `little-owl explain <file>`
 
+> `explain` answers to both an issue number and a file path. `little-owl explain 3` is issue #3 from
+> the last `check`; `little-owl explain src/auth.ts` is that file's history, which is what this
+> section is about.
+
 Code archaeology: _why does this file exist?_
 
 ```bash
