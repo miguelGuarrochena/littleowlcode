@@ -1,3 +1,5 @@
+import { WRAPPER_SEGMENTS } from './paths.js';
+
 /**
  * A small, dependency-free glob matcher.
  *
@@ -89,6 +91,30 @@ const normalizePattern = (pattern: string): string => {
   if (value.startsWith('./')) value = value.slice(2);
   if (value.endsWith('/')) value = `${value}**`;
   return value;
+};
+
+/**
+ * Compiles a user-written path pattern so it matches whichever spelling the
+ * project uses.
+ *
+ * Layer directories are declared without the `src/` wrapper (`components`), so
+ * people naturally write `forbidden` and `scope` patterns the same way. A
+ * pattern that already names a wrapper is taken literally; a bare one matches
+ * both `components/**` and `src/components/**`.
+ */
+export const compileProjectPattern = (pattern: string): CompiledPattern[] => {
+  const compiled = [compilePattern(pattern)];
+  const first = pattern.replace(/^\.\//, '').split('/')[0];
+  if (first !== undefined && WRAPPER_SEGMENTS.has(first)) return compiled;
+  return [
+    ...compiled,
+    ...[...WRAPPER_SEGMENTS].map((wrapper) => compilePattern(`${wrapper}/${pattern}`)),
+  ];
+};
+
+/** True when any spelling of the pattern claims this path. */
+export const matchesProjectPath = (path: string, patterns: CompiledPattern[]): boolean => {
+  return patterns.some((pattern) => matchesCompiled(path, [pattern]));
 };
 
 /**

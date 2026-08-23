@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createJiti } from 'jiti';
 import type { LittleOwlConfig, ResolvedConfig, Strictness } from './schema.js';
 import { baseConfig, ruleSeveritiesFor, THRESHOLD_PRESETS } from './defaults.js';
+import { validateConfig } from './validate.js';
 
 export const CONFIG_DIR = '.little-owl';
 
@@ -125,6 +126,7 @@ export const resolveConfig = (raw: LittleOwlConfig): ResolvedConfig => {
     ci: { ...base.ci, ...(raw.ci ?? {}) },
     scope: raw.scope ?? base.scope,
     sourcePath: null,
+    warnings: validateConfig(raw),
   };
 };
 

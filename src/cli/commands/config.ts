@@ -1,10 +1,9 @@
 import path from 'node:path';
-import { loadConfig } from '../../config/load.js';
 import { allRules } from '../../rules/index.js';
 import { printJson } from '../../output/json.js';
 import { colors, dim, icons } from '../../output/theme.js';
 import { heading, padEnd } from '../../output/ui.js';
-import { print, resolveRoot, type GlobalOptions } from '../runtime.js';
+import { loadProjectConfig, print, resolveRoot, type GlobalOptions } from '../runtime.js';
 import type { Severity } from '../../core/types.js';
 
 export interface ConfigOptions extends GlobalOptions {
@@ -22,7 +21,7 @@ const SEVERITY_PAINT: Record<Severity, (text: string) => string> = {
 /** `little-owl config` — what settings are actually in effect. */
 export const configCommand = async (options: ConfigOptions): Promise<number> => {
   const root = resolveRoot(options);
-  const config = await loadConfig(root);
+  const config = await loadProjectConfig(root);
 
   if (options.json) {
     printJson(config);

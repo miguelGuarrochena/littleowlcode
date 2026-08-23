@@ -28,6 +28,7 @@ Current version: **1**.
   },
   "stats": {
     "files": 286,
+    "layeredFiles": 271,
     "linesOfCode": 41230,
     "functions": 1902,
     "cycles": 0,
@@ -72,6 +73,13 @@ Current version: **1**.
 }
 ```
 
+### Two file counts
+
+`project.fileCount` is everything scanned. `stats.files` counts only the non-test source files the
+scores are computed from, so the two differ by the number of test files. `stats.layeredFiles` is the
+subset of `stats.files` that a declared layer covers — the gap to `stats.files` is how much of the
+tree the architecture rules never looked at.
+
 ### Partial analyses
 
 `truncated` is `true` when a project has more source files than one run will scan. Treat the metrics
@@ -98,6 +106,16 @@ clean one.
 `fingerprint` is what makes drift comparison work. Use it as the identity of a finding, not `title`,
 which can be reworded.
 
+### `baseline.configDrifted`
+
+`true` when the configuration changed after the baseline was recorded. The comparison still runs, but
+`newFindings` may contain problems that predate the change — a tightened threshold or a corrected
+layer model makes existing findings visible for the first time. Re-record with `little-owl baseline`
+to get an honest comparison again.
+
+`null` means the question cannot be answered: there is no baseline, or it was written by a version of
+Little Owl that did not record the configuration.
+
 ## `little-owl review --json` and `little-owl ci --json`
 
 Everything above, plus:
@@ -109,6 +127,7 @@ Everything above, plus:
     "createdAt": "2026-08-01T09:12:44.000Z",
     "commit": "3f9a1c2...",
     "metrics": { "overall": 89, "architecture": 91 /* ... */ },
+    "configDrifted": false,
   },
   "drift": {
     "overall": -3,

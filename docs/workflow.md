@@ -56,6 +56,25 @@ You update the baseline when _you_ decide the current state is the new normal:
 little-owl baseline
 ```
 
+### Editing the config makes the baseline stale
+
+A baseline records the findings that existed **under one configuration**. Change the configuration —
+tighten a threshold, correct the layer model, switch a rule on — and findings that were always there
+become visible for the first time. Compared against the old baseline they look new, and the review
+blames whatever you happened to be working on.
+
+Little Owl stores a fingerprint of the configuration alongside the baseline and checks it on every
+comparison. When the two disagree, `review`, `ci` and `watch` all say so before the verdict:
+
+```
+⚠ The configuration changed since this baseline was recorded.
+   Findings that already existed can show up as new, so treat the comparison as a guide.
+   Run `little-owl baseline` to re-record against the current configuration.
+```
+
+Re-recording is still your decision — Little Owl never does it on its own. But now you know when the
+comparison stopped being one.
+
 ## A worked session
 
 **1. Set up once.**

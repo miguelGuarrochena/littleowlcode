@@ -4,10 +4,12 @@ import { runReview, determineStatus } from '../src/review/review.js';
 import {
   buildBaseline,
   compareToBaseline,
+  configDriftedFromBaseline,
   explainDrift,
   readBaseline,
   writeBaseline,
 } from '../src/baseline/baseline.js';
+import { resolveConfig } from '../src/config/load.js';
 import { checkScope, groupByArea } from '../src/review/scope.js';
 import { analyzeImpact } from '../src/review/impact.js';
 import { generatePrompt } from '../src/prompts/generate.js';
@@ -107,6 +109,52 @@ describe('baseline and drift', () => {
     ).toBe(true);
     expect(comparison.newFindings).toHaveLength(0);
     expect(comparison.drift.architecture).toBeGreaterThan(0);
+  });
+
+  it('notices when the configuration changed after the baseline was recorded', async () => {
+    project = TempProject.create(BASE_FILES);
+    const relaxed = resolveConfig({ thresholds: { maxFileLines: 800 } });
+    const analysis = await project.analyze({ thresholds: { maxFileLines: 800 } });
+    writeBaseline(project.root, buildBaseline(project.root, analysis.result, relaxed));
+
+    const baseline = readBaseline(project.root)!;
+    expect(baseline.configFingerprint).toBeTruthy();
+    expect(configDriftedFromBaseline(baseline, relaxed)).toBe(false);
+
+    // Tightening a threshold changes what gets reported, so the baseline can no
+    // longer tell a new problem from one it simply never looked for.
+    const strict = resolveConfig({ thresholds: { maxFileLines: 1 } });
+    expect(configDriftedFromBaseline(baseline, strict)).toBe(true);
+
+    // CI thresholds change exit codes, not findings, so they must not count.
+    const otherCi = resolveConfig({ thresholds: { maxFileLines: 800 }, ci: { maxOverallDrop: 1 } });
+    expect(configDriftedFromBaseline(baseline, otherCi)).toBe(false);
+  });
+
+  it('cannot answer the drift question for a baseline that predates fingerprints', async () => {
+    project = TempProject.create(BASE_FILES);
+    const analysis = await project.analyze();
+    const legacy = buildBaseline(project.root, analysis.result);
+    expect(legacy.configFingerprint).toBeUndefined();
+    expect(configDriftedFromBaseline(legacy, resolveConfig({}))).toBeNull();
+    expect(configDriftedFromBaseline(null, resolveConfig({}))).toBeNull();
+  });
+
+  it('surfaces baseline staleness through review', async () => {
+    project = TempProject.create(BASE_FILES);
+    project.initGit();
+
+    // Baseline recorded with the defaults...
+    const loose = await project.analyze();
+    writeBaseline(project.root, buildBaseline(project.root, loose.result, resolveConfig({})));
+
+    // ...then someone tightens the config the review will actually load.
+    project.write({
+      '.little-owl/config.ts': 'export default { thresholds: { maxFileLines: 1 } };\n',
+    });
+    const review = await runReview({ root: project.root, cache: false });
+    expect(review.configDrifted).toBe(true);
+    expect(reviewToJson(review, '0.0.0').baseline?.configDrifted).toBe(true);
   });
 });
 
@@ -249,6 +297,7 @@ describe('prompt generation', () => {
       resolvedFindings: [],
       scope: scope ? { patterns: scope, inScope: [], outOfScope: ['other/x.ts'] } : null,
       drift: null,
+      configDrifted: null,
     };
   };
 
@@ -371,6 +420,7 @@ describe('ci gate', () => {
             dependencies: 0,
             typeSafety: 0,
           },
+    configDrifted: null,
   });
 
   const warning: Finding = {

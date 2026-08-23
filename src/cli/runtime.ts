@@ -1,6 +1,8 @@
 import path from 'node:path';
 import * as prompts from '@clack/prompts';
 import { colors } from '../output/theme.js';
+import { loadConfig } from '../config/load.js';
+import type { ResolvedConfig } from '../config/schema.js';
 import { readVersion } from '../utils/version.js';
 
 export { readVersion };
@@ -67,6 +69,31 @@ export const print = (text: string): void => {
 
 export const printError = (text: string): void => {
   process.stderr.write(`${colors.red('✗')} ${text}\n`);
+};
+
+/**
+ * Loads configuration and reports anything wrong with it.
+ *
+ * Every command goes through here rather than calling `loadConfig` directly, so
+ * a misspelled key cannot stay quiet just because the command that hit it was
+ * not the one that prints warnings.
+ *
+ * Warnings go to stderr: `--json` consumers must keep getting clean stdout.
+ */
+export const loadProjectConfig = async (root: string): Promise<ResolvedConfig> => {
+  const config = await loadConfig(root);
+  printConfigWarnings(config);
+  return config;
+};
+
+export const printConfigWarnings = (config: ResolvedConfig): void => {
+  if (config.warnings.length === 0) return;
+  const where = config.sourcePath ? path.relative(process.cwd(), config.sourcePath) : 'config';
+  process.stderr.write(`${colors.yellow('⚠')} ${where}\n`);
+  for (const warning of config.warnings) {
+    process.stderr.write(`  ${warning}\n`);
+  }
+  process.stderr.write('\n');
 };
 
 /**

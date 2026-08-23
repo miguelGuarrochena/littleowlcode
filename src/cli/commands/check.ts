@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { analyzeProject } from '../../core/analyze.js';
-import { loadConfig } from '../../config/load.js';
 import { checkToJson, printJson } from '../../output/json.js';
 import { renderHealth, renderOwlLine, renderProjectSummary } from '../../output/report.js';
 import { colors, dim } from '../../output/theme.js';
 import {
   createProgress,
   isInteractive,
+  loadProjectConfig,
   print,
   PROGRESS_LABELS,
   readVersion,
@@ -25,7 +25,7 @@ export interface CheckOptions extends GlobalOptions {
 /** `little-owl check` — the health of the codebase as it stands right now. */
 export const checkCommand = async (options: CheckOptions): Promise<number> => {
   const root = resolveRoot(options);
-  const config = await loadConfig(root);
+  const config = await loadProjectConfig(root);
   const progress = createProgress(!options.json && !options.quiet && isInteractive());
 
   progress.start(PROGRESS_LABELS['reading-project']!);
@@ -46,7 +46,7 @@ export const checkCommand = async (options: CheckOptions): Promise<number> => {
 
   if (!options.quiet) {
     print('');
-    print(renderProjectSummary(result.project));
+    print(renderProjectSummary(result.project, result.project.fileCount - result.stats.files));
     print('');
   }
 

@@ -1,6 +1,7 @@
 import type { DependencyEdge, ImportRef, ParsedFile } from '../core/types.js';
 import { stronglyConnectedComponents } from './scc.js';
 import {
+  isAliasedSpecifier,
   packageNameOf,
   resolveGoImport,
   resolveJsImport,
@@ -178,7 +179,22 @@ export class DependencyGraph {
  * Files an import points at something outside the project: a package, an asset,
  * or nothing Little Owl can account for.
  */
-const recordUnresolved = (graph: DependencyGraph, from: string, reference: ImportRef): void => {
+const recordUnresolved = (
+  graph: DependencyGraph,
+  from: string,
+  reference: ImportRef,
+  context: ResolverContext,
+): void => {
+  // An aliased specifier is the project talking about itself. `@/styles/x.css`
+  // resolves to nothing only because Little Owl does not read stylesheets, and
+  // calling it the package `@/styles` invents a dependency nobody can install.
+  if (isAliasedSpecifier(reference.raw, context)) {
+    if (!isAssetImport(reference.raw)) {
+      graph.unresolved.push({ file: from, specifier: reference.raw, line: reference.line });
+    }
+    return;
+  }
+
   const packageName = packageNameOf(reference.raw);
   if (packageName) {
     // `bootstrap/dist/bootstrap.css` still means bootstrap is in use, so the
@@ -246,7 +262,7 @@ export const buildDependencyGraph = (
         continue;
       }
 
-      recordUnresolved(graph, file.path, reference);
+      recordUnresolved(graph, file.path, reference, context);
     }
   }
 

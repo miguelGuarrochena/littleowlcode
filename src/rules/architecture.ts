@@ -1,7 +1,14 @@
-import type { Finding } from '../core/types.js';
+import type { Finding, MetricStats } from '../core/types.js';
 import { createFinding, isEnabled, type AnalysisContext, type Rule } from '../core/context.js';
-import { classifyLayerDependency, featureOf, layerOf } from '../architecture/layers.js';
-import { compilePattern, matchesCompiled } from '../utils/glob.js';
+import {
+  classifyLayerDependency,
+  featureOf,
+  layerCoverage,
+  layerOf,
+  type LayerCoverage,
+} from '../architecture/layers.js';
+import { LAYER_COVERAGE_TARGET, uncheckedArchitecturePenalty } from '../core/metrics.js';
+import { compileProjectPattern, matchesProjectPath } from '../utils/glob.js';
 
 /**
  * A cycle that only exists because a package re-exports its own submodules.
@@ -179,16 +186,16 @@ const forbiddenDependency: Rule = {
     if (rules.length === 0) return [];
 
     const compiled = rules.map(([from, to]) => ({
-      from: compilePattern(from),
-      to: compilePattern(to),
+      from: compileProjectPattern(from),
+      to: compileProjectPattern(to),
       source: `${from} -> ${to}`,
     }));
     const findings: Finding[] = [];
 
     for (const edge of context.graph.edges) {
       for (const rule of compiled) {
-        if (!matchesCompiled(edge.from, [rule.from])) continue;
-        if (!matchesCompiled(edge.to, [rule.to])) continue;
+        if (!matchesProjectPath(edge.from, rule.from)) continue;
+        if (!matchesProjectPath(edge.to, rule.to)) continue;
 
         const finding = createFinding(this, context, {
           file: edge.from,
@@ -244,6 +251,66 @@ const deepImportChain: Rule = {
   },
 };
 
+/**
+ * Code the boundary rules cannot see.
+ *
+ * Every other architecture rule needs both ends of an import to belong to a
+ * layer. When the model reaches only part of the tree the remaining files are
+ * never checked, and "no boundary violations found" is a statement about the
+ * part that was examined. This rule names the gap, and explains the points the
+ * architecture score withholds for it.
+ */
+const unlayeredCode: Rule = {
+  id: 'architecture/unlayered-code',
+  category: 'architecture',
+  description: 'Directories that no declared layer covers, so boundary rules never see them.',
+  run(context) {
+    const coverage = layerCoverage(context.files, context.layers);
+    if (coverage.total === 0) return [];
+
+    if (!coverage.applicable) {
+      const finding = createFinding(this, context, {
+        title: 'No layered structure to check',
+        message:
+          `Little Owl recognises ${context.layers.order.length === 1 ? 'only one layer' : 'no layers'} ` +
+          'here, and a boundary needs two sides, so no boundary checks ran. The architecture score ' +
+          'reflects cycles and import depth only.',
+        detail: coverage.unplaced.slice(0, 6).map((entry) => `${entry.directory} (${entry.files})`),
+        suggestion:
+          'Declare your layers under `architecture.layers` in .little-owl/config.ts to turn boundary checks on.',
+        key: ['none'],
+        current: 0,
+      });
+      return finding ? [finding] : [];
+    }
+
+    if (coverage.share >= LAYER_COVERAGE_TARGET) return [];
+
+    const percent = Math.round(coverage.share * 100);
+    const withheld = Math.round(uncheckedArchitecturePenalty(statsShim(coverage)));
+    const finding = createFinding(this, context, {
+      title: `${coverage.total - coverage.layered} files sit outside every declared layer`,
+      message:
+        `Only ${percent}% of source files belong to a layer, so boundary rules never looked at the ` +
+        `other ${100 - percent}%. The architecture score is ${withheld} point${withheld === 1 ? '' : 's'} ` +
+        'lower than the violation count alone, for what could not be checked.',
+      detail: coverage.unplaced
+        .slice(0, 6)
+        .map((entry) => `${entry.directory} — ${entry.files} file${entry.files === 1 ? '' : 's'}`),
+      suggestion:
+        'Add the directories above to `architecture.layers` in .little-owl/config.ts, or leave them out deliberately.',
+      key: [percent],
+      baseline: Math.round(LAYER_COVERAGE_TARGET * 100),
+      current: percent,
+    });
+    return finding ? [finding] : [];
+  },
+};
+
+/** The two fields `uncheckedArchitecturePenalty` reads, so the rule and the score agree. */
+const statsShim = (coverage: LayerCoverage): MetricStats =>
+  ({ files: coverage.total, layeredFiles: coverage.layered }) as MetricStats;
+
 export const architectureRules: Rule[] = [
   circularDependency,
   layerViolation,
@@ -251,4 +318,5 @@ export const architectureRules: Rule[] = [
   crossFeatureImport,
   forbiddenDependency,
   deepImportChain,
+  unlayeredCode,
 ];

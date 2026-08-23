@@ -8,7 +8,13 @@
 export { analyzeProject } from './core/analyze.js';
 export type { Analysis, AnalyzeOptions, ProgressStep } from './core/analyze.js';
 export { ParseCache } from './core/cache.js';
-export { computeMetrics, computeStats, fileMetricsOf } from './core/metrics.js';
+export {
+  computeMetrics,
+  computeStats,
+  fileMetricsOf,
+  uncheckedArchitecturePenalty,
+  LAYER_COVERAGE_TARGET,
+} from './core/metrics.js';
 export { sortFindings, createFinding, severityOf, isEnabled } from './core/context.js';
 export type { AnalysisContext, Rule, NewFinding } from './core/context.js';
 export { scanFiles, languageOf, SOURCE_EXTENSIONS, MAX_SCANNED_FILES } from './core/scan.js';
@@ -31,6 +37,8 @@ export {
   CONFIG_DIR,
 } from './config/load.js';
 export { DEFAULT_IGNORE, THRESHOLD_PRESETS, DEFAULT_RULE_SEVERITIES } from './config/defaults.js';
+export { validateConfig, validateAgainstProject, knownRuleIds } from './config/validate.js';
+export { configFingerprint } from './config/fingerprint.js';
 
 export { detectProject, describeStack } from './detect/project.js';
 export {
@@ -48,11 +56,13 @@ export {
   buildLayerModel,
   inferLayers,
   layerOf,
+  layerCoverage,
+  matchesLayerDirectory,
   featureOf,
   classifyLayerDependency,
   describeLayerChain,
 } from './architecture/layers.js';
-export type { LayerModel, LayerRelation } from './architecture/layers.js';
+export type { LayerCoverage, LayerModel, LayerRelation } from './architecture/layers.js';
 
 export { runReview, determineStatus } from './review/review.js';
 export type { ReviewOptions } from './review/review.js';
@@ -73,8 +83,10 @@ export {
   readBaseline,
   writeBaseline,
   compareToBaseline,
+  configDriftedFromBaseline,
   explainDrift,
   baselinePath,
+  CONFIG_DRIFT_NOTICE,
 } from './baseline/baseline.js';
 export { readHistory, appendHistory, latestEntries } from './baseline/history.js';
 export type { HistoryEntry } from './baseline/history.js';

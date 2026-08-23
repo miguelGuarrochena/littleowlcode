@@ -1,8 +1,6 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { analyzeProject } from '../../core/analyze.js';
 import { MAX_SCANNED_FILES } from '../../core/scan.js';
-import { loadConfig } from '../../config/load.js';
 import { detectChanges } from '../../git/git.js';
 import { findDeadCode, type Confidence } from '../../review/dead-code.js';
 import { analyzeTestGaps, changedFilesOf } from '../../review/test-gap.js';
@@ -16,8 +14,13 @@ import {
   renderTestGaps,
 } from '../../output/insight.js';
 import { dim, colors, icons } from '../../output/theme.js';
+import { countLabel } from '../../output/ui.js';
+import { validateAgainstProject } from '../../config/validate.js';
+import { layerCoverage } from '../../architecture/layers.js';
+import { configDriftedFromBaseline, readBaseline } from '../../baseline/baseline.js';
+import { LAYER_COVERAGE_TARGET } from '../../core/metrics.js';
 import { toPosix } from '../../utils/paths.js';
-import { print, resolveRoot, type GlobalOptions } from '../runtime.js';
+import { loadProjectConfig, print, resolveRoot, type GlobalOptions } from '../runtime.js';
 import type { AnalysisContext } from '../../core/context.js';
 import type { AnalysisResult, AnalysisWarning } from '../../core/types.js';
 import type { ResolvedConfig } from '../../config/schema.js';
@@ -32,7 +35,7 @@ const contextFor = async (
   options: InsightOptions,
 ): Promise<{ root: string; context: AnalysisContext }> => {
   const root = resolveRoot(options);
-  const config = await loadConfig(root);
+  const config = await loadProjectConfig(root);
   const { context } = await analyzeProject({
     root,
     config,
@@ -160,6 +163,8 @@ interface DoctorCheck {
   name: string;
   status: 'ok' | 'warn' | 'info';
   detail: string;
+  /** Further lines, indented under the check. Used when one line is not enough. */
+  extra?: string[];
 }
 
 /**
@@ -215,22 +220,73 @@ const gitCheck: CheckBuilder = ({ result }) => ({
     : 'not a git repository — review and explain have nothing to compare against',
 });
 
-const configCheck: CheckBuilder = ({ root, config }) => ({
-  name: 'Configuration',
-  status: config.sourcePath ? 'ok' : 'info',
-  detail: config.sourcePath
-    ? path.relative(root, config.sourcePath)
-    : 'using defaults — run `little-owl init` to declare your layers',
-});
+const configCheck: CheckBuilder = ({ root, config }) => {
+  if (!config.sourcePath) {
+    return {
+      name: 'Configuration',
+      status: 'info',
+      detail: 'using defaults — run `little-owl init` to declare your layers',
+    };
+  }
 
-const baselineCheck: CheckBuilder = ({ root }) => {
-  const exists = fs.existsSync(path.join(root, '.little-owl', 'baseline.json'));
+  const where = path.relative(root, config.sourcePath);
+  return {
+    name: 'Configuration',
+    status: config.warnings.length === 0 ? 'ok' : 'warn',
+    detail:
+      config.warnings.length === 0
+        ? where
+        : `${where} — ${countLabel(config.warnings.length, 'setting')} ignored (see the warnings above)`,
+  };
+};
+
+/**
+ * Configured patterns that match nothing.
+ *
+ * A `forbidden` pair or a layer directory that matches no file behaves exactly
+ * like one that found no problems, so it stays broken indefinitely. This is the
+ * check that tells them apart.
+ */
+const patternCheck: CheckBuilder = ({ config, context }) => {
+  const dead = validateAgainstProject(config, context.files, context.layers);
+  if (dead.length === 0) return null;
+  return {
+    name: 'Config patterns',
+    status: 'warn',
+    detail: dead[0]!,
+    ...(dead.length > 1 ? { extra: dead.slice(1) } : {}),
+  };
+};
+
+const baselineCheck: CheckBuilder = ({ root, config }) => {
+  const baseline = readBaseline(root);
+  if (!baseline) {
+    return { name: 'Baseline', status: 'info', detail: 'none yet — run `little-owl baseline`' };
+  }
+
+  const drifted = configDriftedFromBaseline(baseline, config);
+  if (drifted === true) {
+    return {
+      name: 'Baseline',
+      status: 'warn',
+      detail: 'recorded under a different configuration — re-record with `little-owl baseline`',
+    };
+  }
+  // A baseline from an older version cannot answer the question at all, and a
+  // comparison that might be misattributed should not look like a clean one.
+  if (drifted === null) {
+    return {
+      name: 'Baseline',
+      status: 'info',
+      detail:
+        'recorded before Little Owl tracked configuration — re-record to make drift verifiable',
+    };
+  }
+
   return {
     name: 'Baseline',
-    status: exists ? 'ok' : 'info',
-    detail: exists
-      ? 'recorded — reviews compare against it'
-      : 'none yet — run `little-owl baseline`',
+    status: 'ok',
+    detail: 'recorded under this configuration — reviews compare against it',
   };
 };
 
@@ -252,15 +308,35 @@ const resolutionCheck: CheckBuilder = ({ context }) => {
   };
 };
 
+/**
+ * The layer model, and how much of the tree it reaches.
+ *
+ * A green tick next to a chain of layer names used to be the whole answer,
+ * which reads as "your architecture is fine" even when the model covers a
+ * third of the code. Coverage is what makes the tick mean something.
+ */
 const architectureCheck: CheckBuilder = ({ context }) => {
   const { order, inferred } = context.layers;
+  if (order.length < 2) {
+    return {
+      name: 'Architecture',
+      status: 'info',
+      detail: 'no layers detected — boundary checks are inactive',
+    };
+  }
+
+  const coverage = layerCoverage(context.files, context.layers);
+  const percent = Math.round(coverage.share * 100);
+  const source = inferred ? 'inferred' : 'configured';
+  const covered = coverage.share >= LAYER_COVERAGE_TARGET;
+
   return {
     name: 'Architecture',
-    status: order.length >= 2 ? 'ok' : 'info',
-    detail:
-      order.length >= 2
-        ? `${order.join(' → ')} (${inferred ? 'inferred' : 'configured'})`
-        : 'no layers detected — boundary checks are inactive',
+    status: covered ? 'ok' : 'warn',
+    detail: covered
+      ? `${order.join(' → ')} (${source}) — ${percent}% of files covered`
+      : `${order.join(' → ')} (${source}) — only ${percent}% of files are inside a layer` +
+        `${coverage.unplaced[0] ? `, e.g. ${coverage.unplaced[0].directory}` : ''}`,
   };
 };
 
@@ -288,6 +364,7 @@ const CHECKS: CheckBuilder[] = [
   projectCheck,
   gitCheck,
   configCheck,
+  patternCheck,
   baselineCheck,
   filesCheck,
   resolutionCheck,
@@ -315,6 +392,7 @@ const printChecks = (checks: DoctorCheck[], warnings: AnalysisWarning[]): void =
 
   for (const check of checks) {
     print(`${CHECK_MARK[check.status]()} ${check.name.padEnd(20)} ${dim(check.detail)}`);
+    for (const line of check.extra ?? []) print(dim(`${' '.repeat(23)}${line}`));
   }
 
   if (warnings.length > 0) {
@@ -340,7 +418,7 @@ const printChecks = (checks: DoctorCheck[], warnings: AnalysisWarning[]): void =
 
 export const doctorCommand = async (options: InsightOptions): Promise<number> => {
   const root = resolveRoot(options);
-  const config = await loadConfig(root);
+  const config = await loadProjectConfig(root);
   const started = Date.now();
   const { result, context } = await analyzeProject({
     root,

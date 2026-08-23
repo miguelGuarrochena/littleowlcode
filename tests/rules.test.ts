@@ -317,3 +317,113 @@ describe('duplicate blocks', () => {
     }
   });
 });
+
+describe('layer coverage', () => {
+  /** Ten UI files, and `helpers` files that no layer claims. */
+  const projectWith = (unlayeredCount: number): Record<string, string> => {
+    const files: Record<string, string> = {
+      'package.json': '{"name":"coverage"}',
+      'src/services/orders.ts': 'export const list = () => [];\n',
+    };
+    for (let index = 0; index < 10; index += 1) {
+      files[`src/components/C${index}.tsx`] =
+        "import { list } from '../services/orders';\nexport const C = () => list();\n";
+    }
+    for (let index = 0; index < unlayeredCount; index += 1) {
+      files[`src/helpers/h${index}.ts`] = `export const h${index} = () => ${index};\n`;
+    }
+    return files;
+  };
+
+  it('stays quiet when the layers reach the whole project', async () => {
+    project = TempProject.create(projectWith(0));
+    const { result } = await project.analyze();
+
+    expect(result.stats.layeredFiles).toBe(result.stats.files);
+    expect(findingsFor(result.findings, 'architecture/unlayered-code')).toEqual([]);
+    expect(result.metrics.architecture).toBe(100);
+  });
+
+  it('withholds architecture points for code no layer covers', async () => {
+    project = TempProject.create(projectWith(20));
+    const { result } = await project.analyze();
+
+    // 11 of 31 files are unlayered, so boundary rules saw about a third of it.
+    expect(result.stats.layeredFiles).toBeLessThan(result.stats.files);
+    expect(result.metrics.architecture).toBeLessThan(100);
+
+    const [finding] = findingsFor(result.findings, 'architecture/unlayered-code');
+    expect(finding?.severity).toBe('info');
+    expect(finding?.detail?.some((line) => line.startsWith('src/helpers'))).toBe(true);
+    // The points withheld are stated, not silently deducted.
+    expect(finding?.message).toContain('points lower');
+  });
+
+  it('says so rather than docking points when nothing looks like a layer', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"flat"}',
+      'src/one.ts': 'export const one = 1;\n',
+      'src/two.ts': "import { one } from './one';\nexport const two = one + 1;\n",
+    });
+    const { result } = await project.analyze();
+
+    expect(result.metrics.architecture).toBe(100);
+    const [finding] = findingsFor(result.findings, 'architecture/unlayered-code');
+    expect(finding?.title).toBe('No layered structure to check');
+  });
+
+  it('does not judge coverage against a single layer', async () => {
+    // One layer has no boundaries to cross, so "how much is covered" is not a
+    // question about it — and must not cost the project points.
+    project = TempProject.create({
+      'package.json': '{"name":"one-layer"}',
+      'src/core/engine.ts': 'export const run = () => 1;\n',
+      'src/loose/a.ts': 'export const a = 1;\n',
+      'src/loose/b.ts': 'export const b = 2;\n',
+      'src/loose/c.ts': 'export const c = 3;\n',
+    });
+    const { result } = await project.analyze();
+
+    expect(result.stats.layeredFiles).toBe(0);
+    expect(result.metrics.architecture).toBe(100);
+    expect(findingsFor(result.findings, 'architecture/unlayered-code')[0]?.title).toBe(
+      'No layered structure to check',
+    );
+  });
+});
+
+describe('javascript in a typescript project', () => {
+  it('flags a plain .js source file that should have been typed', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"mixed","devDependencies":{"typescript":"^5"}}',
+      'tsconfig.json': '{"compilerOptions":{"allowJs":true}}',
+      'src/typed.ts': 'export const a = 1;\n',
+      'src/untyped.js': 'export const b = 2;\n',
+    });
+    const { result } = await project.analyze();
+
+    const [finding] = findingsFor(result.findings, 'type-safety/js-in-ts-project');
+    expect(finding?.detail).toEqual(['src/untyped.js']);
+    expect(result.stats.jsFilesInTsProject).toBe(1);
+  });
+
+  it('leaves alone the files that have to be JavaScript', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"tooling","devDependencies":{"typescript":"^5"}}',
+      'tsconfig.json': '{"compilerOptions":{"allowJs":true}}',
+      'src/typed.ts': 'export const a = 1;\n',
+      // Run directly by node, served verbatim, or read by a tool.
+      'scripts/build.mjs': 'export const build = () => 1;\n',
+      'scripts/legacy.cjs': 'module.exports = 1;\n',
+      'public/sw.js': 'self.addEventListener("fetch", () => {});\n',
+      'jest.setup.js': 'globalThis.x = 1;\n',
+      'next.config.js': 'module.exports = {};\n',
+    });
+    const { result } = await project.analyze();
+
+    expect(findingsFor(result.findings, 'type-safety/js-in-ts-project')).toEqual([]);
+    // The score has to agree with the report, or it penalises invisible files.
+    expect(result.stats.jsFilesInTsProject).toBe(0);
+    expect(result.metrics.typeSafety).toBe(100);
+  });
+});

@@ -5,12 +5,15 @@ import { analyzeProject } from '../src/core/analyze.js';
 import { ParseCache } from '../src/core/cache.js';
 import { MAX_SCANNED_FILES, scanFiles } from '../src/core/scan.js';
 import { resolveConfig, ensureLocalGitignore } from '../src/config/load.js';
+import { DEFAULT_RULE_SEVERITIES } from '../src/config/defaults.js';
+import { allRules } from '../src/rules/index.js';
 import {
   isImplicitlyUsed,
   undeclaredPackages,
   unusedDependencies,
 } from '../src/detect/dependencies.js';
-import { renderDependencies, renderHealth, renderTruncationNotice } from '../src/output/report.js';
+import { renderHealth, renderTruncationNotice } from '../src/output/report.js';
+import { renderDependencies } from '../src/output/inspect.js';
 import { checkToJson } from '../src/output/json.js';
 import { findingsFor } from './helpers.js';
 import { TempProject } from './temp-project.js';
@@ -404,5 +407,33 @@ describe('changed-file reporting', () => {
     );
 
     expect([...directories].sort()).toEqual(['src', 'supabase']);
+  });
+});
+
+/**
+ * `validateConfig` decides which rule ids are real from `DEFAULT_RULE_SEVERITIES`.
+ * A rule missing from that table would be silently off, and configuring it would
+ * be rejected as a typo — so the two lists have to stay the same list.
+ */
+describe('rule registry', () => {
+  it('gives every rule a default severity', () => {
+    const missing = allRules
+      .map((rule) => rule.id)
+      .filter((id) => !(id in DEFAULT_RULE_SEVERITIES));
+
+    expect(missing).toEqual([]);
+  });
+
+  it('has no default severity for a rule that does not exist', () => {
+    const ids = new Set(allRules.map((rule) => rule.id));
+    const orphans = Object.keys(DEFAULT_RULE_SEVERITIES).filter((id) => !ids.has(id));
+
+    expect(orphans).toEqual([]);
+  });
+
+  it('accepts every rule id it ships as configurable', () => {
+    for (const rule of allRules) {
+      expect(resolveConfig({ rules: { [rule.id]: 'warning' } }).warnings).toEqual([]);
+    }
   });
 });

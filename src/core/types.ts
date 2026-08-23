@@ -60,6 +60,12 @@ export type MetricKey = keyof Metrics;
 /** Raw counts behind the scores. Kept in the baseline so drift is explainable. */
 export interface MetricStats {
   files: number;
+  /**
+   * Files that fall inside a declared (or inferred) layer. Boundary rules can
+   * only see these, so the gap to `files` is how much of the tree the
+   * architecture checks never looked at.
+   */
+  layeredFiles: number;
   linesOfCode: number;
   functions: number;
   cycles: number;
@@ -198,6 +204,13 @@ export interface Baseline {
   createdAt: string;
   commit?: string;
   branch?: string;
+  /**
+   * Identity of the configuration this baseline was recorded under. When the
+   * config changes, findings that always existed can start looking new, so
+   * every comparison checks this and says so instead of blaming the change.
+   * Absent on baselines written before Little Owl recorded it.
+   */
+  configFingerprint?: string;
   metrics: Metrics;
   stats: MetricStats;
   /** Fingerprints of findings that existed when the baseline was taken. */
@@ -247,6 +260,12 @@ export interface ReviewResult {
   resolvedFindings: Finding[];
   scope: ScopeResult | null;
   drift: Record<MetricKey, number> | null;
+  /**
+   * True when the configuration changed after the baseline was recorded, so
+   * pre-existing findings may be reported as new. `null` when there is no
+   * baseline, or it predates Little Owl recording the configuration.
+   */
+  configDrifted: boolean | null;
 }
 
 export interface ScopeResult {

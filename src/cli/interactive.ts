@@ -1,12 +1,18 @@
 import * as prompts from '@clack/prompts';
 import { detectProject, describeStack } from '../detect/project.js';
 import { scanFiles } from '../core/scan.js';
-import { loadConfig } from '../config/load.js';
 import { readBaseline } from '../baseline/baseline.js';
 import { isGitRepository } from '../git/git.js';
 import { banner } from '../output/ui.js';
 import { colors, dim, icons } from '../output/theme.js';
-import { cancelled, isInteractive, print, resolveRoot, type GlobalOptions } from './runtime.js';
+import {
+  cancelled,
+  isInteractive,
+  loadProjectConfig,
+  print,
+  resolveRoot,
+  type GlobalOptions,
+} from './runtime.js';
 import { checkCommand } from './commands/check.js';
 import { reviewCommand } from './commands/review.js';
 import { watchCommand } from './commands/watch.js';
@@ -33,7 +39,7 @@ export const interactiveCommand = async (options: GlobalOptions): Promise<number
   print(banner());
   print('');
 
-  const config = await loadConfig(root);
+  const config = await loadProjectConfig(root);
   const { files } = scanFiles(root, config);
   const project = detectProject(root, { files });
 

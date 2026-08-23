@@ -3,15 +3,14 @@ import chokidar from 'chokidar';
 import { analyzeProject } from '../../core/analyze.js';
 import { ParseCache } from '../../core/cache.js';
 import { SOURCE_EXTENSIONS } from '../../core/scan.js';
-import { loadConfig } from '../../config/load.js';
-import { readBaseline } from '../../baseline/baseline.js';
+import { configDriftedFromBaseline, readBaseline } from '../../baseline/baseline.js';
 import { generatePrompt } from '../../prompts/generate.js';
-import { renderFinding } from '../../output/report.js';
+import { renderConfigDrift, renderFinding } from '../../output/report.js';
 import { colors, dim, icons } from '../../output/theme.js';
 import { countLabel, metricLine, rule } from '../../output/ui.js';
 import { basename, toPosix } from '../../utils/paths.js';
 import { compilePattern, matchesCompiled } from '../../utils/glob.js';
-import { print, resolveRoot, type GlobalOptions } from '../runtime.js';
+import { loadProjectConfig, print, resolveRoot, type GlobalOptions } from '../runtime.js';
 import { attributeFindings, createRunQueue, type AttributedFindings } from '../watch-runtime.js';
 import type { AnalysisResult, Finding, Metrics } from '../../core/types.js';
 import type { DependencyGraph } from '../../graph/dependency-graph.js';
@@ -91,7 +90,7 @@ const untilStopped = (cleanup: () => void): Promise<void> => {
 
 export const watchCommand = async (options: WatchOptions): Promise<number> => {
   const root = resolveRoot(options);
-  const config = await loadConfig(root);
+  const config = await loadProjectConfig(root);
   const cache = ParseCache.open(root);
 
   print('');
@@ -110,6 +109,14 @@ export const watchCommand = async (options: WatchOptions): Promise<number> => {
   };
 
   printHealthy(first.result, session.reference, savedBaseline !== null);
+  // Watch reports every save against this reference. If the reference was
+  // recorded under different settings it will keep flagging old findings, so
+  // say it once at start-up rather than leaving it to be puzzled out.
+  if (configDriftedFromBaseline(savedBaseline, config)) {
+    print('');
+    print(renderConfigDrift());
+    print('');
+  }
   print(dim(`Watching ${first.result.project.fileCount} files. Press Ctrl+C to stop.`));
   print('');
 
@@ -297,6 +304,7 @@ const promptFor = (findings: Finding[]): string => {
       resolvedFindings: [],
       scope: null,
       drift: null,
+      configDrifted: null,
     },
     { maxInstructions: 4 },
   );

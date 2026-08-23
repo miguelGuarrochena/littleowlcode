@@ -1,5 +1,6 @@
 import * as prompts from '@clack/prompts';
 import { runReview } from '../../review/review.js';
+import { loadConfig } from '../../config/load.js';
 import { buildBaseline, writeBaseline } from '../../baseline/baseline.js';
 import { appendHistory } from '../../baseline/history.js';
 import { generatePrompt } from '../../prompts/generate.js';
@@ -11,6 +12,7 @@ import { currentBranch, headCommit, isGitRepository } from '../../git/git.js';
 import {
   createProgress,
   isInteractive,
+  loadProjectConfig,
   print,
   PROGRESS_LABELS,
   readVersion,
@@ -38,6 +40,10 @@ export const reviewCommand = async (options: ReviewOptions): Promise<number> => 
   if (!isGitRepository(root)) {
     print(dim('Not a git repository — reviewing the whole codebase instead of a change.'));
   }
+
+  // `runReview` loads the config itself; this pass exists so a broken setting
+  // is reported before the report that silently ignored it.
+  await loadProjectConfig(root);
 
   const progress = createProgress(!options.json && !options.quiet && isInteractive());
   progress.start(PROGRESS_LABELS['reading-project']!);
@@ -140,7 +146,8 @@ const followUpMenu = async (
       });
       if (prompts.isCancel(confirmed) || !confirmed) continue;
 
-      const file = writeBaseline(root, buildBaseline(root, review.current));
+      const config = await loadConfig(root);
+      const file = writeBaseline(root, buildBaseline(root, review.current, config));
       print('');
       print(colors.green(`✓ Baseline updated: ${file}`));
       print('');

@@ -449,9 +449,39 @@ const parseTypeScriptLike = (input: ParseInput, isTs: boolean): ParsedFile => {
       serverOnlyImports: imports
         .filter((reference) => SERVER_ONLY_MODULES.includes(reference.raw))
         .map((reference) => reference.raw),
+      pathLiterals: collectPathLiterals(input.content),
     },
   };
 };
+
+/**
+ * Quoted strings that name a file, outside of any import.
+ *
+ * Plenty of files are referenced without being imported: a jest config naming
+ * its setup file, a service worker registered as `'/sw.js'`, a route table
+ * built from paths. Reachability that only follows imports calls all of them
+ * dead, so this is the trace that keeps them alive.
+ */
+const PATH_LITERAL = /['"`]([^'"`\n\s]*\/[^'"`\n\s]*\.[A-Za-z0-9]{1,5})['"`]/g;
+
+/** Enough to cover a config file; a cap keeps a generated file from bloating the cache. */
+const MAX_PATH_LITERALS = 200;
+
+const collectPathLiterals = (content: string): string[] => {
+  const found = new Set<string>();
+  for (const match of content.matchAll(PATH_LITERAL)) {
+    found.add(normalizeLiteral(match[1]!));
+    if (found.size >= MAX_PATH_LITERALS) break;
+  }
+  return [...found];
+};
+
+/** Drops the prefixes tools put in front of a path: `./`, `/`, `<rootDir>/`. */
+const normalizeLiteral = (value: string): string =>
+  value
+    .replace(/^<[^>]+>\//, '')
+    .replace(/^\.{1,2}\//, '')
+    .replace(/^\//, '');
 
 export const typeScriptAdapter: LanguageAdapter = {
   language: 'typescript',

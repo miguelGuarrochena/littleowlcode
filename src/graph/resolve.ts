@@ -134,9 +134,25 @@ export const packageNameOf = (specifier: string): string | undefined => {
   if (specifier.startsWith('node:')) return specifier;
   const parts = specifier.split('/');
   if (specifier.startsWith('@')) {
+    // `@/foo` has an empty scope, so it is not an installable package name —
+    // it is a path alias. Reporting `@/styles` as a missing dependency sends
+    // people looking for a package that cannot exist.
+    if (parts[0] === '@') return undefined;
     return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : specifier;
   }
   return parts[0];
+};
+
+/**
+ * Whether a specifier is addressed through one of the project's own path
+ * aliases, and is therefore internal however it ends up resolving.
+ */
+export const isAliasedSpecifier = (specifier: string, context: ResolverContext): boolean => {
+  return context.aliases.some((alias) =>
+    alias.exact
+      ? specifier === alias.prefix
+      : alias.prefix.length > 0 && specifier.startsWith(alias.prefix),
+  );
 };
 
 export const resolvePythonImport = (

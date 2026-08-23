@@ -26,11 +26,25 @@ penalty = (cycles × 10
          + layerSkips × 2
          + crossFeatureImports × 1) / per100Files
 
-architecture = clamp(100 − penalty)
+coverage  = layeredFiles / files
+unchecked = max(0, 0.8 − coverage) × 50     // 0 when no layer matched anything
+
+architecture = clamp(100 − penalty − unchecked)
 ```
 
 Counting per 100 files means the score reflects density, not size. Ten cycles in a 50-file project is
 a much worse situation than ten cycles in a 5,000-file one, and the score says so.
+
+**The `unchecked` term is the important one.** Boundary rules only fire between two files that both
+belong to a layer. A model covering 60% of the tree can report "no violations" and mean it — about
+the 60% it saw. Without the discount, a project whose layers are wrong scores a perfect 100 for an
+architecture nothing examined, and correcting the config _lowers_ the number. The points withheld
+are never silent: `architecture/unlayered-code` states the figure and names the directories behind
+it, and `little-owl architecture` prints the coverage line under every verdict.
+
+The target is 80%, not 100%: build scripts, generated types and repository-root files legitimately
+sit outside any layer. When no layer matches anything at all, nothing is withheld — the report says
+"no layered structure detected" in words instead.
 
 ### Complexity
 
@@ -111,6 +125,7 @@ The full set of counts is in `--json` output under `stats`:
 | Field                                           | Meaning                                      |
 | ----------------------------------------------- | -------------------------------------------- |
 | `files`, `linesOfCode`, `functions`             | Size of the analysed source, excluding tests |
+| `layeredFiles`                                  | Of those, the ones inside a declared layer   |
 | `cycles`                                        | Circular dependency groups                   |
 | `layerViolations`                               | Lower layer importing a higher one           |
 | `layerSkips`                                    | Layer reaching past its neighbour            |

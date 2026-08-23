@@ -215,16 +215,20 @@ const readingOrder = (
     order.push(`${area.path}/`);
   }
 
-  // A layered project reads best top-down, so prefer that order when known.
-  if (context.layers.order.length >= 2 && order.length > 1) {
+  // A layered project reads best top-down, so prefer that order when known —
+  // but never above the entry area. "Start where execution starts" is the whole
+  // point, and a single API route can give `app/` a lower-layer attribution
+  // that would otherwise push it below `components/`.
+  const [first, ...rest] = order;
+  if (context.layers.order.length >= 2 && rest.length > 1) {
     const layerRank = new Map(context.layers.order.map((layer, index) => [layer, index]));
     const areaByPath = new Map(areas.map((area) => [`${area.path}/`, area]));
-    order.sort((a, b) => {
+    rest.sort((a, b) => {
       const rankA = layerRank.get(areaByPath.get(a)?.layer ?? '') ?? 99;
       const rankB = layerRank.get(areaByPath.get(b)?.layer ?? '') ?? 99;
       return rankA - rankB;
     });
   }
 
-  return order;
+  return first === undefined ? [] : [first, ...rest];
 };

@@ -15,6 +15,7 @@ import {
   classifyLayerDependency,
 } from '../src/architecture/layers.js';
 import { renderConfigFile } from '../src/cli/commands/init.js';
+import { validateAgainstProject } from '../src/config/validate.js';
 
 let project: TempProject | null = null;
 
@@ -289,5 +290,136 @@ describe('a generated config loads without the package installed', () => {
     } finally {
       project.cleanup();
     }
+  });
+});
+
+describe('configuration validation', () => {
+  it('names settings that do not exist instead of ignoring them silently', () => {
+    const config = resolveConfig({
+      thresholdz: { maxFileLines: 10 },
+      strictness: 'balnced',
+      architecture: { layerPolicee: 'adjacent' },
+      ci: { failOn: 'sometimes' },
+    } as never);
+
+    expect(config.warnings).toEqual([
+      'thresholdz is not a Little Owl setting — did you mean "thresholds"?',
+      'architecture.layerPolicee is not a Little Owl setting — did you mean "layerPolicy"?',
+      'strictness: "balnced" is not valid — use relaxed, balanced, strict.',
+      'ci.failOn: "sometimes" is not valid — use warning, error, never.',
+    ]);
+  });
+
+  it('rejects rule ids that no rule answers to', () => {
+    const config = resolveConfig({
+      rules: {
+        'complexity/large-fil': 'error',
+        'architecture/invented': 'error',
+        'complexity/large-file': 'error',
+      },
+    } as never);
+
+    expect(config.warnings).toEqual([
+      'rules: "complexity/large-fil" is not a rule, so this severity is ignored — did you mean "complexity/large-file"?',
+      'rules: "architecture/invented" is not a rule, so this severity is ignored — see `little-owl config --rules` for the full list.',
+    ]);
+  });
+
+  it('rejects severities that are not severities', () => {
+    const config = resolveConfig({ rules: { 'complexity/large-file': 'loud' } } as never);
+    expect(config.warnings).toEqual([
+      'rules["complexity/large-file"]: "loud" is not a severity — use off, info, warning, error.',
+    ]);
+  });
+
+  it('says nothing about a config that is entirely correct', () => {
+    const config = resolveConfig({
+      strictness: 'strict',
+      architecture: { layers: { ui: ['components'] }, layerPolicy: 'downward' },
+      thresholds: { maxFileLines: 300 },
+      rules: { 'complexity/large-file': 'off' },
+      ci: { failOn: 'warning', maxOverallDrop: 2 },
+      ignore: ['generated/**'],
+      include: ['src/**'],
+      scope: [],
+    });
+    expect(config.warnings).toEqual([]);
+  });
+
+  it('reports patterns that match nothing, and why they probably do not', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"t"}',
+      'src/components/Button.tsx': "import { db } from '../lib/db/client';\nexport const B = db;\n",
+      'src/lib/db/client.ts': 'export const db = 1;\n',
+    });
+
+    const config = resolveConfig({
+      architecture: {
+        layers: { ui: ['components'], data: ['lib/db', 'lib/repositories'] },
+        // Written the way layer directories are written — without `src/`.
+        forbidden: [['components/**', 'lib/db/**']],
+      },
+    });
+    const { context } = await project.analyze({
+      architecture: {
+        layers: { ui: ['components'], data: ['lib/db', 'lib/repositories'] },
+        forbidden: [['components/**', 'lib/db/**']],
+      },
+    });
+
+    // The bare form now matches `src/...` too, so only the truly dead pattern
+    // is reported — a warning about a rule that works would be worse than none.
+    const warnings = validateAgainstProject(config, context.files, context.layers);
+    expect(warnings).toEqual([
+      'architecture.layers.data: "lib/repositories" matches no file, so that layer is smaller than you declared it.',
+    ]);
+
+    const forbidden = context.files.length
+      ? (
+          await project!.analyze({
+            architecture: {
+              layers: { ui: ['components'], data: ['lib/db'] },
+              forbidden: [['components/**', 'lib/db/**']],
+            },
+          })
+        ).result.findings
+      : [];
+    expect(forbidden.some((f) => f.id === 'architecture/forbidden-dependency')).toBe(true);
+  });
+
+  it('still reports a forbidden pattern that matches nothing in any spelling', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"t"}',
+      'src/components/Button.tsx': 'export const B = 1;\n',
+    });
+    const declared = {
+      architecture: { forbidden: [['widgets/**', 'lib/db/**']] as Array<[string, string]> },
+    };
+    const { context } = await project.analyze(declared);
+
+    expect(validateAgainstProject(resolveConfig(declared), context.files, context.layers)).toEqual([
+      'architecture.forbidden: the from pattern "widgets/**" matches no file, so the rule never fires.',
+      'architecture.forbidden: the to pattern "lib/db/**" matches no file, so the rule never fires.',
+    ]);
+  });
+
+  it('stays quiet when every configured pattern reaches something', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"t"}',
+      'src/components/Button.tsx': "import { db } from '../lib/db/client';\nexport const B = db;\n",
+      'src/lib/db/client.ts': 'export const db = 1;\n',
+    });
+
+    const declared = {
+      architecture: {
+        layers: { ui: ['components'], data: ['lib/db'] },
+        forbidden: [['src/components/**', 'src/lib/db/**']] as Array<[string, string]>,
+      },
+    };
+    const { context } = await project.analyze(declared);
+
+    expect(validateAgainstProject(resolveConfig(declared), context.files, context.layers)).toEqual(
+      [],
+    );
   });
 });

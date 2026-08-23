@@ -31,3 +31,19 @@ export const topSegment = (file: string): string => {
 };
 
 export const segments = (file: string): string[] => file.split('/').filter(Boolean);
+
+/**
+ * Directory names that wrap a project rather than describe it. Dropping them
+ * lets `src/components/x` and `components/x` be talked about as one thing,
+ * which is what people mean when they name a layer `components`.
+ */
+export const WRAPPER_SEGMENTS = new Set(['src', 'app_src', 'source']);
+
+/** `src/lib/db/client.ts` -> `['lib', 'db', 'client.ts']` */
+export const meaningfulSegments = (file: string): string[] => {
+  const parts = segments(file);
+  return parts[0] !== undefined && WRAPPER_SEGMENTS.has(parts[0]) ? parts.slice(1) : parts;
+};
+
+/** `src/lib/db` -> `lib/db` */
+export const meaningfulPath = (file: string): string => meaningfulSegments(file).join('/');

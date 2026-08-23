@@ -77,6 +77,7 @@ export const DEFAULT_RULE_SEVERITIES: Record<string, Severity> = {
   'architecture/cross-feature-import': 'warning',
   'architecture/forbidden-dependency': 'error',
   'architecture/deep-import-chain': 'info',
+  'architecture/unlayered-code': 'info',
 
   'complexity/large-file': 'warning',
   'complexity/large-function': 'warning',
@@ -173,5 +174,6 @@ export const baseConfig = (strictness: Strictness = 'balanced'): ResolvedConfig 
     ci: { ...DEFAULT_CI },
     scope: [],
     sourcePath: null,
+    warnings: [],
   };
 };

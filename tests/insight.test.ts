@@ -441,3 +441,95 @@ describe('unused exports', () => {
     }
   });
 });
+
+describe('reachability through barrels and strings', () => {
+  it('reports a file only a barrel re-exports, when nothing takes that name', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"barrel-dead"}',
+      // Both are re-exported; only one is ever taken out of the barrel.
+      'src/components/index.ts':
+        "export { Used } from './Used';\nexport { Forgotten } from './Forgotten';\n",
+      'src/components/Used.ts': 'export const Used = 1;\n',
+      'src/components/Forgotten.ts': 'export const Forgotten = 2;\n',
+      'src/main.ts': "import { Used } from './components/index';\nconsole.log(Used);\n",
+    });
+
+    const { context } = await project.analyze();
+    const report = findDeadCode(context, { minConfidence: 'low' });
+    const paths = report.candidates.map((candidate) => candidate.path);
+
+    expect(paths).toContain('src/components/Forgotten.ts');
+    expect(paths).not.toContain('src/components/Used.ts');
+    const forgotten = report.candidates.find((c) => c.path === 'src/components/Forgotten.ts');
+    expect(forgotten?.reasons[0]).toContain('only re-exported by src/components/index.ts');
+  });
+
+  it('leaves a barrel-exported file alone once something imports the name', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"barrel-live"}',
+      'src/components/index.ts': "export { Thing } from './Thing';\n",
+      'src/components/Thing.ts': 'export const Thing = 1;\n',
+      'src/main.ts': "import { Thing } from './components/index';\nconsole.log(Thing);\n",
+    });
+
+    const { context } = await project.analyze();
+    const report = findDeadCode(context, { minConfidence: 'low' });
+
+    expect(report.candidates.map((c) => c.path)).not.toContain('src/components/Thing.ts');
+  });
+
+  it('treats a file named by a string literal as reachable', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"stringly"}',
+      // Registered at runtime, never imported.
+      'src/register.ts': "navigator.serviceWorker.register('/worker/sw.js');\n",
+      'src/main.ts': "import './register';\n",
+      'worker/sw.js': 'self.addEventListener("fetch", () => {});\n',
+      'worker/orphan.js': 'const nothing = 1;\n',
+    });
+
+    const { context } = await project.analyze();
+    const report = findDeadCode(context, { minConfidence: 'low' });
+    const paths = report.candidates.map((candidate) => candidate.path);
+
+    expect(paths).not.toContain('worker/sw.js');
+    expect(paths).toContain('worker/orphan.js');
+  });
+
+  it('says which exports only a test reaches', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"testonly"}',
+      'src/utils.ts':
+        'export const used = 1;\nexport const testedOnly = 2;\nexport const forgotten = 3;\n',
+      'src/app.ts': "import { used } from './utils';\nexport const app = used;\n",
+      'src/main.ts': "import { app } from './app';\nconsole.log(app);\n",
+      'src/utils.test.ts': "import { testedOnly } from './utils';\nconsole.log(testedOnly);\n",
+    });
+
+    const { context } = await project.analyze();
+    const utils = findDeadCode(context).unusedExports.find((e) => e.file === 'src/utils.ts');
+
+    // A name a test reaches is reached, so it is not listed as unused...
+    expect(utils?.names).toEqual(['forgotten']);
+    // ...but "only a test reaches it" is worth saying.
+    expect(utils?.caveats).toEqual(['testedOnly in this file is only used from tests']);
+  });
+});
+
+describe('path aliases are not packages', () => {
+  it('does not invent a dependency from an aliased asset import', async () => {
+    project = TempProject.create({
+      'package.json': '{"name":"aliased-assets","dependencies":{}}',
+      'tsconfig.json': '{"compilerOptions":{"paths":{"@/*":["./src/*"]}}}',
+      'src/app/layout.tsx': "import '@/styles/globals.css';\nexport const Layout = () => null;\n",
+      'src/styles/.keep': '',
+    });
+
+    const { context, result } = await project.analyze();
+
+    expect([...context.graph.externalPackages()]).not.toContain('@/styles');
+    expect([...context.graph.externalPackages()]).toEqual([]);
+    // And it is not counted as a broken import either.
+    expect(result.stats.unresolvedImports).toBe(0);
+  });
+});

@@ -31,7 +31,23 @@ program
   .version(version, '-v, --version')
   .option('-C, --cwd <dir>', 'run against another directory')
   .option('--no-color', 'disable coloured output')
-  .helpOption('-h, --help', 'show help');
+  .helpOption('-h, --help', 'show help')
+  // Seventeen commands with no starting point is a wall. And the npm name is
+  // `little-owl-code`: `npx little-owl` fetches an unrelated package, which is
+  // worth saying where people actually look.
+  .addHelpText(
+    'after',
+    [
+      '',
+      'New here:',
+      '  little-owl doctor    can Little Owl see this project properly?',
+      '  little-owl init      declare your layers and record a baseline',
+      '  little-owl review    what did the last change do?',
+      '',
+      'Installed from npm as `little-owl-code` — `npx little-owl-code <command>`.',
+      'Docs: https://littleowlcode.com/docs',
+    ].join('\n'),
+  );
 
 /** Options declared on the root command are shared by every subcommand. */
 const globals = (): { cwd?: string } => {
@@ -98,6 +114,7 @@ program
   .command('architecture')
   .description('show the detected layers and boundary violations')
   .option('--json', 'machine-readable output')
+  .option('--details', 'name every offending import')
   .option('--no-cache', 'ignore the parse cache, writing nothing to the project')
   .action(async (options) => {
     await run(() => architectureCommand({ ...globals(), ...options }));
@@ -246,9 +263,52 @@ program
     await run(() => doctorCommand({ ...globals(), ...options }));
   });
 
-program.action(async () => {
-  await run(() => interactiveCommand(globals()));
-});
+/**
+ * No command means interactive mode — but a *wrong* command reaches here too,
+ * because the root action swallows leftover arguments. Commander's own message
+ * for that is "too many arguments. Expected 0 arguments but got 1", which tells
+ * nobody they simply mistyped `architecture`.
+ */
+program
+  .argument('[command]', 'command to run (omit for interactive mode)')
+  .action(async (maybeCommand: string | undefined) => {
+    if (maybeCommand !== undefined) {
+      printError(`unknown command '${maybeCommand}'.${didYouMean(maybeCommand)}`);
+      process.stderr.write("  Run 'little-owl --help' to see every command.\n");
+      process.exitCode = 1;
+      return;
+    }
+    await run(() => interactiveCommand(globals()));
+  });
+
+/** Every name and alias the CLI answers to. */
+const commandNames = (): string[] =>
+  program.commands.flatMap((command) => [command.name(), ...command.aliases()]);
+
+const didYouMean = (typed: string): string => {
+  const closest = commandNames()
+    .map((name) => ({ name, distance: editDistance(typed.toLowerCase(), name.toLowerCase()) }))
+    .sort((a, b) => a.distance - b.distance)[0];
+  // Roughly one mistake per three characters, so unrelated words stay quiet.
+  const budget = Math.max(1, Math.floor(Math.max(typed.length, closest?.name.length ?? 0) / 3));
+  return closest && closest.distance <= budget ? ` Did you mean '${closest.name}'?` : '';
+};
+
+const editDistance = (a: string, b: string): number => {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      current[j] = Math.min(
+        previous[j]! + 1,
+        current[j - 1]! + 1,
+        previous[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[b.length]!;
+};
 
 const run = async (command: () => Promise<number> | number): Promise<void> => {
   try {

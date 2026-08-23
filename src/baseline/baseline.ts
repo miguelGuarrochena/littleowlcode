@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AnalysisResult, Baseline, Finding, MetricKey, Metrics } from '../core/types.js';
+import type { ResolvedConfig } from '../config/schema.js';
 import { currentBranch, headCommit } from '../git/git.js';
 import { ensureConfigDir } from '../config/load.js';
+import { configFingerprint } from '../config/fingerprint.js';
 
 export const BASELINE_VERSION = '1';
 
@@ -22,18 +24,48 @@ export const readBaseline = (root: string): Baseline | null => {
   }
 };
 
-export const buildBaseline = (root: string, result: AnalysisResult): Baseline => {
+export const buildBaseline = (
+  root: string,
+  result: AnalysisResult,
+  config?: ResolvedConfig,
+): Baseline => {
   return {
     version: BASELINE_VERSION,
     createdAt: new Date().toISOString(),
     commit: headCommit(root) ?? undefined,
     branch: currentBranch(root) ?? undefined,
+    configFingerprint: config ? configFingerprint(config) : undefined,
     metrics: result.metrics,
     stats: result.stats,
     findings: result.findings,
     fileMetrics: result.fileMetrics,
   };
 };
+
+/**
+ * Whether the configuration moved since the baseline was recorded.
+ *
+ * `null` means the question cannot be answered — a baseline written by an older
+ * version has no fingerprint, and guessing "changed" would nag every user once.
+ */
+export const configDriftedFromBaseline = (
+  baseline: Baseline | null,
+  config: ResolvedConfig,
+): boolean | null => {
+  if (!baseline || !baseline.configFingerprint) return null;
+  return baseline.configFingerprint !== configFingerprint(config);
+};
+
+/**
+ * The one-paragraph explanation shown whenever a comparison is running against
+ * a baseline recorded under different settings. Kept here so `review`, `ci` and
+ * `watch` all say exactly the same thing.
+ */
+export const CONFIG_DRIFT_NOTICE = [
+  'The configuration changed since this baseline was recorded.',
+  'Findings that already existed can show up as new, so treat the comparison as a guide.',
+  'Run `little-owl baseline` to re-record against the current configuration.',
+];
 
 /**
  * Writes the baseline. This is always an explicit action: Little Owl never

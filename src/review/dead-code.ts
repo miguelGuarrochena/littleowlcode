@@ -108,12 +108,18 @@ const CONFIDENCE_RANK: Record<Confidence, number> = { high: 3, medium: 2, low: 1
 /** What each module has taken out of it, and which modules were taken whole. */
 interface NameUsage {
   byFile: Map<string, Set<string>>;
+  /**
+   * The same, counting only test files. An export nothing but a test reaches is
+   * still reachable, but it is worth saying which kind of reachable it is.
+   */
+  byTests: Map<string, Set<string>>;
   /** Modules reached through a wildcard, where no name can be ruled out. */
   wildcarded: Set<string>;
 }
 
 const collectNameUsage = (context: AnalysisContext): NameUsage => {
   const byFile = new Map<string, Set<string>>();
+  const byTests = new Map<string, Set<string>>();
   const wildcarded = new Set<string>();
 
   for (const file of context.files) {
@@ -129,10 +135,15 @@ const collectNameUsage = (context: AnalysisContext): NameUsage => {
       const names = byFile.get(target) ?? new Set<string>();
       for (const name of reference.names ?? []) names.add(name);
       byFile.set(target, names);
+
+      if (!file.isTest) continue;
+      const testNames = byTests.get(target) ?? new Set<string>();
+      for (const name of reference.names ?? []) testNames.add(name);
+      byTests.set(target, testNames);
     }
   }
 
-  return { byFile, wildcarded };
+  return { byFile, byTests, wildcarded };
 };
 
 /** Whether a file's exported names can be judged at all. */
@@ -162,11 +173,6 @@ const findUnusedExports = (
   packageEntries: Set<string>,
 ): UnusedExport[] => {
   const usage = collectNameUsage(context);
-  // A name can also be reached from a test, which is not counted as usage.
-  const caveats = context.files.some((file) => file.isTest)
-    ? ['test files are not counted as usage']
-    : [];
-
   const unused: UnusedExport[] = [];
 
   for (const file of context.files) {
@@ -175,6 +181,18 @@ const findUnusedExports = (
     const used = usage.byFile.get(file.path) ?? new Set<string>();
     const names = file.exports.filter((name) => !used.has(name)).sort();
     if (names.length === 0) continue;
+
+    // Tests do count as usage, so a name listed here is reached by nothing at
+    // all. What is worth flagging is the neighbouring case: names in this file
+    // that only a test reaches.
+    const fromTests = usage.byTests.get(file.path) ?? new Set<string>();
+    const testOnly = file.exports.filter((name) => fromTests.has(name)).sort();
+    const caveats =
+      testOnly.length > 0
+        ? [
+            `${testOnly.join(', ')} in this file ${testOnly.length === 1 ? 'is' : 'are'} only used from tests`,
+          ]
+        : [];
 
     unused.push({
       file: file.path,
@@ -185,6 +203,76 @@ const findUnusedExports = (
   }
 
   return unused.sort((a, b) => (a.file < b.file ? -1 : 1));
+};
+
+/** Every path-shaped string literal anywhere in the project. */
+const pathLiterals = (context: AnalysisContext): Set<string> => {
+  const literals = new Set<string>();
+  for (const file of context.files) {
+    const found = file.meta['pathLiterals'];
+    if (!Array.isArray(found)) continue;
+    for (const literal of found) if (typeof literal === 'string') literals.add(literal);
+  }
+  return literals;
+};
+
+/**
+ * Whether some string in the project names this file.
+ *
+ * A config that points at `<rootDir>/jest.setup.js`, or a component that
+ * registers `'/sw.js'`, keeps that file alive without importing it. The literal
+ * has to match the whole filename plus whatever directories it gave, so a
+ * passing mention of `foo.ts` cannot silence a real finding about `a/b/foo.ts`.
+ */
+const isNamedInSource = (file: string, literals: Set<string>): boolean => {
+  for (const literal of literals) {
+    if (literal === file || file.endsWith(`/${literal}`)) return true;
+  }
+  return false;
+};
+
+/**
+ * The barrel that is the only thing keeping this file alive, if there is one.
+ *
+ * `index.ts` doing `export { X } from './X'` counts as an importer, so dead
+ * code hides behind barrels: the file has a dependent, the barrel is an entry
+ * point by convention, and neither is ever reported. A re-export only keeps a
+ * module alive if somebody actually takes that name out of the barrel.
+ */
+const reachedOnlyByUnusedReExport = (
+  file: ParsedFile,
+  context: AnalysisContext,
+  usage: NameUsage,
+  packageEntries: Set<string>,
+): string | null => {
+  let barrel: string | null = null;
+
+  for (const dependent of context.graph.dependentsOf(file.path)) {
+    // A published entry point can be imported from outside the repository.
+    if (packageEntries.has(dependent)) return null;
+
+    const parsed = context.fileMap.get(dependent);
+    if (!parsed) return null;
+
+    const references = parsed.imports.filter((reference) => reference.resolved === file.path);
+    if (references.length === 0) return null;
+    // Anything that is not a re-export is somebody genuinely using the module.
+    if (references.some((reference) => reference.kind !== 'export-from')) return null;
+    // `export * from` republishes everything, so no name can be ruled out.
+    if (references.some((reference) => reference.wildcard)) return null;
+    // Something takes the barrel whole; any name could be the one it wanted.
+    if (usage.wildcarded.has(dependent)) return null;
+
+    const republished = references.flatMap((reference) => reference.names ?? []);
+    if (republished.length === 0) return null;
+
+    const takenFromBarrel = usage.byFile.get(dependent) ?? new Set<string>();
+    if (republished.some((name) => takenFromBarrel.has(name))) return null;
+
+    barrel = dependent;
+  }
+
+  return barrel;
 };
 
 export const findDeadCode = (
@@ -206,49 +294,30 @@ export const findDeadCode = (
 
   // Packages re-export through their manifest, not through imports.
   const packageEntries = packageEntryPoints(context);
+  const usage = collectNameUsage(context);
+  const namedInSource = pathLiterals(context);
 
   for (const file of context.files) {
     if (file.isTest && !options.includeTests) continue;
 
     const dependents = context.graph.dependentsOf(file.path);
-    if (dependents.length > 0) continue;
+    const barrel =
+      dependents.length === 0
+        ? null
+        : reachedOnlyByUnusedReExport(file, context, usage, packageEntries);
+    if (dependents.length > 0 && !barrel) continue;
 
     if (
       matchesCompiled(file.path, conventions) ||
       isInEntryDirectory(file.path) ||
-      packageEntries.has(file.path)
+      packageEntries.has(file.path) ||
+      isNamedInSource(file.path, namedInSource)
     ) {
       entryPoints.push(file.path);
       continue;
     }
 
-    const reasons = ['nothing in the project imports it'];
-    const caveats: string[] = [];
-
-    if (file.exports.length === 0) {
-      reasons.push('it exports nothing');
-    } else {
-      caveats.push(`it exports ${file.exports.length} name${file.exports.length === 1 ? '' : 's'}`);
-    }
-
-    if (hasUnresolvedDynamicImports) {
-      caveats.push('the project uses dynamic imports Little Owl could not resolve');
-    }
-    if (file.language === 'python' || file.language === 'go') {
-      caveats.push(`${file.language} resolution is shallower than for TypeScript`);
-    }
-
-    const confidence: Confidence =
-      caveats.length === 0 ? 'high' : caveats.length === 1 ? 'medium' : 'low';
-
-    candidates.push({
-      path: file.path,
-      confidence,
-      reasons,
-      caveats,
-      lines: file.lines,
-      exports: file.exports.length,
-    });
+    candidates.push(describeCandidate(file, barrel, hasUnresolvedDynamicImports));
   }
 
   const floor = CONFIDENCE_RANK[options.minConfidence ?? 'low'];
@@ -264,6 +333,48 @@ export const findDeadCode = (
       ),
     entryPoints: entryPoints.sort(),
     hasUnresolvedDynamicImports,
+  };
+};
+
+/**
+ * The case for and against one candidate.
+ *
+ * Confidence falls with every reason the conclusion might be wrong, which is
+ * the whole contract of this command: it never claims to know, it says how much
+ * of a guess each answer is.
+ */
+const describeCandidate = (
+  file: ParsedFile,
+  barrel: string | null,
+  hasUnresolvedDynamicImports: boolean,
+): DeadCodeCandidate => {
+  const reasons = [
+    barrel
+      ? `only re-exported by ${barrel}, and nothing takes that name from it`
+      : 'nothing in the project imports it',
+  ];
+  const caveats: string[] = [];
+
+  if (file.exports.length === 0) {
+    reasons.push('it exports nothing');
+  } else {
+    caveats.push(`it exports ${file.exports.length} name${file.exports.length === 1 ? '' : 's'}`);
+  }
+
+  if (hasUnresolvedDynamicImports) {
+    caveats.push('the project uses dynamic imports Little Owl could not resolve');
+  }
+  if (file.language === 'python' || file.language === 'go') {
+    caveats.push(`${file.language} resolution is shallower than for TypeScript`);
+  }
+
+  return {
+    path: file.path,
+    confidence: caveats.length === 0 ? 'high' : caveats.length === 1 ? 'medium' : 'low',
+    reasons,
+    caveats,
+    lines: file.lines,
+    exports: file.exports.length,
   };
 };
 

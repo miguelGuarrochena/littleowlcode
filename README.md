@@ -25,6 +25,9 @@
 npx little-owl-code
 ```
 
+> The npm package is **`little-owl-code`**. Plain `little-owl` on npm is an unrelated project, so
+> `npx little-owl` will not fetch this tool. Once installed, the `little-owl` command is yours.
+
 Little Owl reads your project from disk, builds its dependency graph, and tells you what your last
 change did to the shape of the codebase — which boundaries it crossed, what got more complex, what
 is now duplicated.
@@ -142,6 +145,17 @@ little-owl baseline --show # see what is recorded
 **Little Owl never updates the baseline on its own.** That rule matters more than it sounds. If the
 baseline moved after every AI iteration, "healthy" would silently be redefined as "whatever the code
 is right now", and steady degradation would become invisible. Updating it is always your call.
+
+A baseline also records **which configuration produced it**. Tighten a threshold or correct your
+layers and findings that were always there become visible for the first time — against the old
+baseline they look new, and the review blames whatever you were working on. Little Owl compares the
+two and says so before the verdict:
+
+```
+⚠ The configuration changed since this baseline was recorded.
+   Findings that already existed can show up as new, so treat the comparison as a guide.
+   Run `little-owl baseline` to re-record against the current configuration.
+```
 
 ### 2. Scope
 
@@ -266,10 +280,10 @@ Running `little-owl` with no arguments opens interactive mode, which is the frie
 
 **Analysis**
 
-| Command                   | What it does                            |
-| ------------------------- | --------------------------------------- |
-| `little-owl architecture` | Detected layers and boundary violations |
-| `little-owl dependencies` | Declared vs actually imported packages  |
+| Command                   | What it does                             |
+| ------------------------- | ---------------------------------------- |
+| `little-owl architecture` | Layers, coverage and boundary violations |
+| `little-owl dependencies` | Declared vs actually imported packages   |
 
 **CI, configuration and diagnostics**
 
@@ -279,8 +293,9 @@ Running `little-owl` with no arguments opens interactive mode, which is the frie
 | `little-owl config` | Settings in effect (`--rules` to list every rule) |
 | `little-owl doctor` | Is Little Owl seeing this project properly?       |
 
-Useful flags: `--json`, `--details`, `--quiet`, `--scope`, `--base <ref>`, `-C <dir>`, `--no-color`,
-`--no-cache` (analyse without writing anything to the project).
+Useful flags: `--json` (every command), `--details` (`check`, `review`, `architecture`), `--quiet`,
+`--scope`, `--base <ref>`, `-C <dir>`, `--no-color`, `--no-cache` (analyse without writing anything
+to the project). Each command's own `--help` is authoritative.
 
 ### review
 
@@ -540,8 +555,42 @@ with its current severity.
 
 **`ignore`** adds glob patterns on top of the built-in list; your root `.gitignore` is read as well.
 
+**Paths are written the same way everywhere.** Layer directories, `forbidden` patterns and `scope`
+all accept the bare form (`components/**`) and match `src/components/**` too, so a project with a
+`src/` wrapper does not need two spellings.
+
+**Configuration is checked, not just read.** Unknown keys, rule ids that no rule answers to, invalid
+severities and patterns that match nothing are all reported, with a suggestion where there is an
+obvious one. A silently ignored setting looks exactly like a rule that found no problems, so none of
+them stay quiet:
+
+```
+⚠ .little-owl/config.ts
+  thresholdz is not a Little Owl setting — did you mean "thresholds"?
+  rules: "complexity/large-fil" is not a rule, so this severity is ignored — did you mean "complexity/large-file"?
+```
+
+`little-owl doctor` adds the ones that need the project to answer — a layer directory or a
+`forbidden` pattern that matches no file.
+
 Config can also live at `.little-owl/config.{js,mjs,json}`, `little-owl.config.{ts,js,mjs,json}`,
 `.littleowlrc.{ts,js,mjs,json}`, or a bare `.littleowlrc` (JSON).
+
+**Layers you do not declare are not checked.** Boundary rules need both ends of an import to belong
+to a layer, so a model reaching part of the tree reports "no violations" about the part it saw.
+`little-owl architecture` prints the coverage under every verdict and names the largest directories
+sitting outside the model, and the architecture score withholds points for what it could not check —
+stated in the `architecture/unlayered-code` finding rather than deducted silently.
+
+```
+⚠ No boundary violations among the 68% of files inside a layer.
+
+Coverage: 161 of 236 source files are inside a layer (68%)
+
+Not covered by any layer:
+  src/lib                      32 files
+  src/lib/facial               15 files
+```
 
 If there is no config at all, Little Owl still works: it infers layers from your directory names and
 says so in the output. An inferred structure is a guess, and it is labelled as one.

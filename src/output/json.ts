@@ -58,6 +58,8 @@ export interface JsonReviewOutput extends JsonCheckOutput {
     createdAt: string;
     commit?: string;
     metrics: Metrics;
+    /** Whether the config changed after this baseline was recorded. */
+    configDrifted: boolean | null;
   } | null;
   drift: Record<MetricKey, number> | null;
   changes: {
@@ -131,6 +133,9 @@ export const reviewToJson = (review: ReviewResult, version: string): JsonReviewO
           createdAt: review.baseline.createdAt,
           ...(review.baseline.commit ? { commit: review.baseline.commit } : {}),
           metrics: review.baseline.metrics,
+          // True when the config moved after this baseline was recorded, so
+          // `newFindings` may include problems that predate the change.
+          configDrifted: review.configDrifted,
         }
       : null,
     drift: review.drift,

@@ -14,6 +14,7 @@ import {
   cancelled,
   createProgress,
   isInteractive,
+  loadProjectConfig,
   print,
   PROGRESS_LABELS,
   resolveRoot,
@@ -116,16 +117,22 @@ export const initCommand = async (options: InitOptions): Promise<number> => {
   print('');
   print(`${colors.green(icons.ok)} Wrote ${colors.bold(path.relative(root, configFile))}`);
 
+  // Re-analyse under the configuration that was just written. The first pass
+  // ran on defaults, and a baseline recorded under different settings than the
+  // project will actually use is stale the moment it is created.
+  const config = await loadProjectConfig(root);
+  const { result: configured } = await analyzeProject({ root, config });
+
   const shouldBaseline = options.baseline ?? (interactive ? await askBaseline() : true);
   if (shouldBaseline) {
-    const file = writeBaseline(root, buildBaseline(root, result));
+    const file = writeBaseline(root, buildBaseline(root, configured, config));
     print(`${colors.green(icons.ok)} Wrote ${colors.bold(path.relative(root, file))}`);
     print('');
     print(dim('Future reviews compare against this baseline until you explicitly update it.'));
   }
 
   print('');
-  print(renderHealth(result, { maxFindings: 3 }));
+  print(renderHealth(configured, { maxFindings: 3 }));
   print('');
   print(dim(`Next: ${colors.bold('little-owl review')} after your next change.`));
 

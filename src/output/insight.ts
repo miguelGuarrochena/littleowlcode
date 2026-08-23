@@ -65,7 +65,7 @@ export const renderDeadCode = (report: DeadCodeReport): string => {
       lines.push(
         '',
         dim(
-          `${countLabel(report.entryPoints.length, 'file')} treated as entry points by framework convention.`,
+          `${countLabel(report.entryPoints.length, 'file')} treated as reachable: framework entry points, or named by a string somewhere in the source.`,
         ),
       );
     }
@@ -256,6 +256,28 @@ export const renderArchaeology = (report: ArchaeologyReport): string => {
   return lines.join('\n');
 };
 
+/** Where the code lives, how big each area is, and how much reaches into it. */
+const AREAS_SHOWN = 12;
+
+const renderAreas = (areas: ProjectMap['areas']): string[] => {
+  const shown = areas.slice(0, AREAS_SHOWN);
+  const lines = shown.map((area) => {
+    const size = dim(`${countLabel(area.files, 'file')}, ${area.lines.toLocaleString()} lines`);
+    const coupling = area.incoming > 0 ? dim(`  ←${area.incoming}`) : '';
+    return `  ${area.path.padEnd(28)} ${size}${coupling}`;
+  });
+
+  if (areas.length > AREAS_SHOWN) {
+    lines.push(dim(`  ... and ${areas.length - AREAS_SHOWN} more`));
+  }
+  // An unexplained glyph in the middle of a table is a small puzzle every
+  // reader has to solve on their own.
+  if (shown.some((area) => area.incoming > 0)) {
+    lines.push('', dim('  ←n  imports reaching into this area from elsewhere'));
+  }
+  return lines;
+};
+
 export const renderProjectMap = (map: ProjectMap): string => {
   const lines: string[] = [heading('PROJECT MAP'), ''];
 
@@ -282,16 +304,7 @@ export const renderProjectMap = (map: ProjectMap): string => {
     lines.push('');
   }
 
-  if (map.areas.length > 0) {
-    lines.push(colors.bold('Areas'), '');
-    for (const area of map.areas.slice(0, 12)) {
-      const size = dim(`${countLabel(area.files, 'file')}, ${area.lines.toLocaleString()} lines`);
-      const coupling = area.incoming > 0 ? dim(`  ←${area.incoming}`) : '';
-      lines.push(`  ${area.path.padEnd(28)} ${size}${coupling}`);
-    }
-    if (map.areas.length > 12) lines.push(dim(`  ... and ${map.areas.length - 12} more`));
-    lines.push('');
-  }
+  if (map.areas.length > 0) lines.push(colors.bold('Areas'), '', ...renderAreas(map.areas), '');
 
   if (map.entryPoints.length > 0) {
     lines.push(colors.bold('Entry points'), '');

@@ -1,6 +1,12 @@
 import type { FileMetric, Finding, MetricStats, Metrics, ParsedFile } from './types.js';
 import type { AnalysisContext } from './context.js';
-import { layerOf, classifyLayerDependency, featureOf } from '../architecture/layers.js';
+import {
+  layerOf,
+  classifyLayerDependency,
+  featureOf,
+  layerCoverage,
+} from '../architecture/layers.js';
+import { untypedSources } from '../detect/typed-files.js';
 
 /**
  * Scores are a summary, not a verdict.
@@ -78,6 +84,8 @@ export const computeStats = (context: AnalysisContext, findings: Finding[]): Met
     if (fromFeature && toFeature && fromFeature !== toFeature) crossFeatureImports += 1;
   }
 
+  const coverage = layerCoverage(files, layers);
+
   const maxImportDepth = graph
     .nodes()
     .filter((node) => graph.dependentsOf(node).length === 0)
@@ -85,6 +93,7 @@ export const computeStats = (context: AnalysisContext, findings: Finding[]): Met
 
   return {
     files: sourceFiles.length,
+    layeredFiles: coverage.applicable ? coverage.layered : 0,
     linesOfCode,
     functions,
     cycles: context.cycles.length,
@@ -100,12 +109,41 @@ export const computeStats = (context: AnalysisContext, findings: Finding[]): Met
     anyUsages,
     suppressions,
     unsafeAssertions,
-    jsFilesInTsProject: context.project.hasTypeScript
-      ? sourceFiles.filter((file) => file.language === 'javascript').length
-      : 0,
+    // Same predicate the rule uses, so the score cannot penalise a file the
+    // report never mentions.
+    jsFilesInTsProject: untypedSources(sourceFiles, context.project.hasTypeScript).length,
     unresolvedImports: graph.unresolved.length,
     maxImportDepth,
   };
+};
+
+/**
+ * Share of the codebase a layer model should reach before its verdict counts as
+ * covering the project. Below this, the architecture score is discounted for
+ * what it could not see. Not 100%: build scripts, generated types and
+ * repository-root files legitimately sit outside any layer.
+ */
+export const LAYER_COVERAGE_TARGET = 0.8;
+
+/** Points lost per unit of missing coverage. 40 at zero coverage. */
+const UNCHECKED_WEIGHT = 50;
+
+/**
+ * How many architecture points are withheld because the layer model does not
+ * reach the code.
+ *
+ * Boundary rules need both ends of an import to belong to a layer. Without this
+ * discount, a project whose layers describe a third of the tree scores a
+ * perfect 100 for an architecture nothing examined — and leaving the config
+ * wrong becomes the cheapest way to a good number.
+ *
+ * Zero when no layer matched anything at all: there is no model to judge, and
+ * the report says so in words rather than by docking points.
+ */
+export const uncheckedArchitecturePenalty = (stats: MetricStats): number => {
+  if (stats.layeredFiles === 0 || stats.files === 0) return 0;
+  const coverage = stats.layeredFiles / stats.files;
+  return Math.max(0, LAYER_COVERAGE_TARGET - coverage) * UNCHECKED_WEIGHT;
 };
 
 export const computeMetrics = (stats: MetricStats, hasTypeScript: boolean): Metrics => {
@@ -118,7 +156,7 @@ export const computeMetrics = (stats: MetricStats, hasTypeScript: boolean): Metr
       stats.layerSkips * 2 +
       stats.crossFeatureImports * 1) /
     per100Files;
-  const architecture = clampScore(100 - architecturePenalty);
+  const architecture = clampScore(100 - architecturePenalty - uncheckedArchitecturePenalty(stats));
 
   const complexity = clampScore(
     100 -

@@ -1,7 +1,11 @@
 import type { Finding, MetricKey, ReviewResult, ReviewStatus, ScopeResult } from '../core/types.js';
 import { analyzeProject, type ProgressStep } from '../core/analyze.js';
 import { loadConfig } from '../config/load.js';
-import { compareToBaseline, readBaseline } from '../baseline/baseline.js';
+import {
+  compareToBaseline,
+  configDriftedFromBaseline,
+  readBaseline,
+} from '../baseline/baseline.js';
 import { detectChanges } from '../git/git.js';
 import { checkScope } from './scope.js';
 import { fingerprint } from '../utils/hash.js';
@@ -54,6 +58,7 @@ export const runReview = async (options: ReviewOptions): Promise<ReviewResult> =
     resolvedFindings: comparison?.resolvedFindings ?? [],
     scope,
     drift: comparison?.drift ?? null,
+    configDrifted: configDriftedFromBaseline(baseline, config),
   };
 };
 

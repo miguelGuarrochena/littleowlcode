@@ -1,5 +1,6 @@
 import type { Finding, Marker } from '../core/types.js';
 import { createFinding, type Rule } from '../core/context.js';
+import { untypedSources } from '../detect/typed-files.js';
 
 const markersOf = (kinds: Marker['kind'][], markers: Marker[]): Marker[] => {
   return markers.filter((marker) => kinds.includes(marker.kind));
@@ -117,10 +118,7 @@ const jsInTsProject: Rule = {
   run(context) {
     if (!context.project.hasTypeScript) return [];
 
-    const jsFiles = context.files
-      .filter((file) => file.language === 'javascript' && !file.isTest)
-      .filter((file) => !/^[^/]*\.(config|setup)\.[cm]?js$/.test(file.path))
-      .map((file) => file.path);
+    const jsFiles = untypedSources(context.files, context.project.hasTypeScript);
 
     if (jsFiles.length === 0) return [];
 

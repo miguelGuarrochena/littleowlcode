@@ -1,10 +1,16 @@
 import { runReview } from '../../review/review.js';
-import { loadConfig } from '../../config/load.js';
+import { CONFIG_DRIFT_NOTICE } from '../../baseline/baseline.js';
 import { MAX_SCANNED_FILES } from '../../core/scan.js';
 import { printJson, reviewToJson } from '../../output/json.js';
 import { countBySeverity } from '../../output/report.js';
 import { statusText } from '../../output/theme.js';
-import { print, readVersion, resolveRoot, type GlobalOptions } from '../runtime.js';
+import {
+  loadProjectConfig,
+  print,
+  readVersion,
+  resolveRoot,
+  type GlobalOptions,
+} from '../runtime.js';
 import type { Finding, ReviewResult } from '../../core/types.js';
 
 export interface CiOptions extends GlobalOptions {
@@ -32,7 +38,7 @@ export interface CiVerdict {
  */
 export const ciCommand = async (options: CiOptions): Promise<number> => {
   const root = resolveRoot(options);
-  const config = await loadConfig(root);
+  const config = await loadProjectConfig(root);
 
   const review = await runReview({
     root,
@@ -66,14 +72,7 @@ export const ciCommand = async (options: CiOptions): Promise<number> => {
   const considered = newOnly ? review.newFindings : review.current.findings;
   const counts = countBySeverity(considered);
 
-  // A partial analysis must never read as a clean bill of health.
-  if (review.current.truncated) {
-    print(
-      `little-owl: PARTIAL ANALYSIS — only the first ${MAX_SCANNED_FILES.toLocaleString()} ` +
-        'source files were scanned, so this verdict does not cover the whole repository',
-    );
-  }
-
+  printCaveats(review, newOnly);
   print(`little-owl: ${statusText[review.status]}`);
   print(
     `findings: ${counts.error} error, ${counts.warning} warning, ${counts.info} info` +
@@ -92,6 +91,25 @@ export const ciCommand = async (options: CiOptions): Promise<number> => {
   print('');
   print(verdict.passed ? 'result: pass' : `result: fail (${verdict.reasons.join('; ')})`);
   return verdict.exitCode;
+};
+
+/**
+ * Anything that stops the verdict below from meaning what it appears to mean.
+ *
+ * Printed before the verdict, never after: a pipeline that reads the first line
+ * and stops must not read a partial or misattributed pass as a clean one.
+ */
+const printCaveats = (review: ReviewResult, newOnly: boolean): void => {
+  if (review.current.truncated) {
+    print(
+      `little-owl: PARTIAL ANALYSIS — only the first ${MAX_SCANNED_FILES.toLocaleString()} ` +
+        'source files were scanned, so this verdict does not cover the whole repository',
+    );
+  }
+
+  if (review.configDrifted && newOnly) {
+    print(`little-owl: STALE BASELINE — ${CONFIG_DRIFT_NOTICE.join(' ')}`);
+  }
 };
 
 const location = (finding: Finding): string => {

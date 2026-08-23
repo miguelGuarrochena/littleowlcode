@@ -24,6 +24,7 @@ active in your project right now.
 | `architecture/cross-feature-import` | info    | warning  | error  |
 | `architecture/forbidden-dependency` | error   | error    | error  |
 | `architecture/deep-import-chain`    | off     | info     | info   |
+| `architecture/unlayered-code`       | info    | info     | info   |
 | `next/server-import-in-client`      | error   | error    | error  |
 
 **`architecture/circular-dependency`** — files that import each other, directly or through a chain.
@@ -42,6 +43,13 @@ database directly. Only reported when `layerPolicy` is `adjacent`.
 `architecture.featureRoot` to be set or inferred.
 
 **`architecture/forbidden-dependency`** — an edge matching a pair in `architecture.forbidden`.
+
+**`architecture/unlayered-code`** — directories that no declared layer covers. Every other
+architecture rule needs both ends of an import to belong to a layer, so a model reaching a third of
+the tree reports "no boundary violations" about the third it looked at. This rule names the gap,
+lists the largest unplaced directories, and states how many architecture points are withheld for it.
+It stays quiet above 80% coverage. With no layers at all it reports that instead, and no points are
+withheld — there is no model to judge.
 
 **`architecture/deep-import-chain`** — an entry point whose transitive import chain is longer than
 `maxImportDepth`.

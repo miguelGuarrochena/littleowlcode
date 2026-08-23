@@ -76,6 +76,13 @@ export interface ResolvedConfig {
   scope: string[];
   /** Absolute path of the config file that was loaded, if any. */
   sourcePath: string | null;
+  /**
+   * Problems found while reading the config: unknown keys, unknown rule ids,
+   * invalid values. Never fatal — the setting is ignored and the run continues
+   * — but always shown, so a rule that was never applied does not read as a
+   * rule that found nothing.
+   */
+  warnings: string[];
 }
 
 /** Helper for `.little-owl/config.ts` that gives users type checking. */
